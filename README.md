@@ -24,7 +24,7 @@ Dashboard & Reporting
 - Exportable vulnerability reports for audits or forensic analysis.
 
 Technology Stack
-- Frontend: React.js
-- Backend: Flask / FastAPI (Python)
+- Frontend: Tailwind
+- Backend: Flask (Python)
 - Crawler Engine: Playwright
 - Database: MySQL
