@@ -1,9 +1,7 @@
 # Web-Crawler-for-Broken-Access-Control
 A web-based security tool that detects Broken Access Control (BAC) vulnerabilities in web applications.
 
-This project is a web-based security tool that detects Broken Access Control (BAC) vulnerabilities in web applications. It works by simulating multiple user roles (e.g., admin, user, guest), crawling the application, and analyzing differences in access permissions across roles. Unauthorized access attempts are automatically logged, analyzed, and reported through a simple web dashboard.
-
-The system leverages Playwright for automated browser-based crawling, a Flask/FastAPI backend for processing, and MySQL for storing results, ensuring both scalability and ease of use.
+The Web-Based Access Control Vulnerability Detection System is a Flask-powered web application designed to automatically detect Broken Access Control (BAC) vulnerabilities in target web systems. The system uses Playwright as an automated crawler to simulate different user roles—such as Admin, User, and Guest—and analyze which URLs are accessible to each. By comparing access patterns between roles, the system can identify unauthorized access attempts, such as normal users gaining access to admin-only pages. All results are stored in a MySQL database and presented through a web dashboard that includes scan logs, detected violations, and reports. The platform aims to support multi-application scanning, role-based vulnerability testing, and future integration of ML-based access anomaly detection.
 
 # Features
 Role-Based Crawling
