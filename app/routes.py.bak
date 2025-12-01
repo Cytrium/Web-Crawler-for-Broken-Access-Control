@@ -1,0 +1,915 @@
+# app/routes.py
+
+from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify
+from werkzeug.security import generate_password_hash, check_password_hash
+from app.models import SystemUser, Application, Scan, Credential, URL, Violation, Report
+from app import db
+from datetime import datetime
+import re
+
+# Initialize the blueprint
+main = Blueprint('main', __name__)
+
+# -------------------------------------------------------
+# Home Route
+# -------------------------------------------------------
+@main.route('/')
+def home():
+    if "username" in session:
+        return redirect(url_for('main.dashboard'))
+    return render_template('index.html')
+
+
+# -------------------------------------------------------
+# Login Route
+# -------------------------------------------------------
+@main.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        # Fetch user from database
+        user = SystemUser.query.filter_by(username=username).first()
+
+        # Validate user credentials
+        if user and check_password_hash(user.password_hash, password):
+            session['username'] = username
+            session['user_id'] = user.user_id
+            return redirect(url_for('main.dashboard'))
+        else:
+            return render_template('login.html', error='Invalid credentials')
+
+    return render_template('login.html')
+
+# -------------------------------------------------------
+# Login API (POST)
+# -------------------------------------------------------
+@main.route('/api/login', methods=['POST'])
+def login_post():
+    try:
+        data = request.get_json()
+
+        email = data.get('email')
+        password = data.get('password')
+
+        if not email or not password:
+            return jsonify({'success': False, 'message': 'All fields are required.'}), 400
+
+        # Check if user exists
+        user = SystemUser.query.filter_by(email=email).first()
+        if not user:
+            return jsonify({'success': False, 'message': 'Invalid email or password.'}), 401
+
+        # Verify password
+        if not check_password_hash(user.password_hash, password):
+            return jsonify({'success': False, 'message': 'Invalid email or password.'}), 401
+
+        # Store session info
+        session['user_id'] = user.user_id
+        session['username'] = user.username
+        session['role'] = user.role
+
+        # Redirect user to dashboard (or homepage)
+        return jsonify({
+            'success': True,
+            'message': f'Welcome back, {user.username}!',
+            'redirect_url': url_for('main.dashboard')  # change if your dashboard route name differs
+        }), 200
+
+    except Exception as e:
+        print("Login error:", e)
+        return jsonify({'success': False, 'message': 'Internal Server Error'}), 500
+
+
+# -------------------------------------------------------
+# Signup Page
+# -------------------------------------------------------
+@main.route('/signup')
+def signup():
+    return render_template('signup.html')
+
+
+# -------------------------------------------------------
+# Signup API (POST)
+# -------------------------------------------------------
+@main.route('/api/signup', methods=['POST'])
+def signup_post():
+    try:
+        data = request.get_json()
+
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+
+        # Check for missing fields
+        if not username or not email or not password:
+            return jsonify({'success': False, 'message': 'All fields are required.'}), 400
+
+        # Check if user already exists
+        existing_user = SystemUser.query.filter(
+            (SystemUser.username == username) | (SystemUser.email == email)
+        ).first()
+        if existing_user:
+            return jsonify({'success': False, 'message': 'Username or email already exists.'}), 400
+
+        # Hash password
+        hashed_password = generate_password_hash(password)
+
+        # Create new user (default role as "user")
+        new_user = SystemUser(
+            username=username,
+            email=email,
+            password_hash=hashed_password,
+            role="user",
+            created_at=datetime.utcnow()
+        )
+
+        db.session.add(new_user)
+        db.session.commit()
+
+        # Send redirect URL for the frontend to use
+        return jsonify({
+            'success': True,
+            'message': 'User created successfully!',
+            'redirect_url': url_for('main.login')
+        }), 201
+
+    except Exception as e:
+        print("Signup error:", e)
+        return jsonify({'success': False, 'message': 'Internal Server Error'}), 500
+
+
+# -------------------------------------------------------
+# Email Check API
+# -------------------------------------------------------
+# @main.route('/api/check-email', methods=['POST'])
+# def check_email():
+#     try:
+#         data = request.get_json()
+#         email = data.get('email')
+
+#         exists = User.query.filter_by(email=email).first() is not None
+
+#         return jsonify({'exists': exists})
+
+#     except Exception as e:
+#         return jsonify({'error': str(e)}), 500
+
+
+# -------------------------------------------------------
+# Dashboard Route
+# -------------------------------------------------------
+@main.route('/dashboard')
+def dashboard():
+    # ✅ Check if logged in
+    if 'user_id' not in session:
+        return redirect(url_for('main.login'))
+
+    # ✅ Get user from session
+    user_id = session['user_id']
+    user = SystemUser.query.get(user_id)
+
+    if not user:
+        # In case session exists but user is deleted
+        session.clear()
+        return redirect(url_for('main.login'))
+
+    # ✅ Fetch recent scans
+    scans = (
+        Scan.query.filter_by(user_id=user.user_id)
+        .order_by(Scan.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    # ✅ Count all scans and total vulnerabilities
+    total_scans = Scan.query.filter_by(user_id=user.user_id).count()
+    total_vulns = sum(getattr(scan, 'vulnerable_count', 0) or 0 for scan in scans)
+
+    # ✅ Render dashboard
+    return render_template(
+        'dashboard.html',
+        username=user.username,
+        scans=scans,
+        total_scans=total_scans,
+        total_vulns=total_vulns
+    )
+
+# -------------------------------------------------------
+# Quick Scan Page Route
+# -------------------------------------------------------
+@main.route('/quick-scan')
+def quick_scan():
+    # Check if logged in
+    if 'user_id' not in session:
+        return redirect(url_for('main.login'))
+    
+    user_id = session['user_id']
+    user = SystemUser.query.get(user_id)
+    
+    if not user:
+        session.clear()
+        return redirect(url_for('main.login'))
+    
+    # Get user's applications for dropdown (optional)
+    applications = Application.query.filter_by(user_id=user_id).all()
+    
+    return render_template('quick_scan.html', username=user.username, applications=applications)
+
+
+# -------------------------------------------------------
+# Start Quick Scan API (POST)
+# -------------------------------------------------------
+@main.route('/api/quick-scan/start', methods=['POST'])
+def start_quick_scan():
+    """Start a quick vulnerability scan for a single target."""
+    try:
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+
+        user_id = session['user_id']
+        data = request.get_json() or {}
+
+        app_name = data.get('app_name', '').strip()
+        base_url = data.get('baseURL', '').strip()
+        max_depth = int(data.get('maxDepth', 3))
+        roles = data.get('roles', [])
+        requires_auth = data.get('requires_auth', False)
+        credentials = data.get('credentials', {})
+        description = data.get('description', '')
+
+        # Basic validation
+        if not app_name or not base_url:
+            return jsonify({'success': False, 'message': 'App name and URL are required.'}), 400
+
+        # Check or create Application
+        application = Application.query.filter_by(base_url=base_url, user_id=user_id).first()
+        if not application:
+            application = Application(
+                user_id=user_id,
+                name=app_name,
+                base_url=base_url,
+                description=description,
+                created_at=datetime.utcnow()
+            )
+            db.session.add(application)
+            db.session.commit()
+
+        # Create Scan entry
+        new_scan = Scan(
+            app_id=application.app_id,
+            user_id=user_id,
+            baseURL=base_url,
+            maxDepth=max_depth,
+            start_time=datetime.utcnow(),
+            status='Queued',
+            vulnerable_count=0,
+            created_at=datetime.utcnow()
+        )
+        db.session.add(new_scan)
+        db.session.commit()
+
+        # Save credentials if provided
+        if requires_auth and isinstance(credentials, dict):
+            for role, creds in credentials.items():
+                if creds.get('email') and creds.get('password'):
+                    new_cred = Credential(
+                        app_id=application.app_id,
+                        role_name=role,
+                        email=creds['email'],
+                        password=creds['password'],
+                        created_at=datetime.utcnow()
+                    )
+                    db.session.add(new_cred)
+            db.session.commit()
+
+        # Simulate starting scan
+        new_scan.status = 'Running'
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Quick scan started for {base_url}',
+            'scan_id': new_scan.scan_id,
+            'redirect_url': url_for('main.dashboard')
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Quick Scan Error: {e}")
+        return jsonify({'success': False, 'message': 'Internal Server Error'}), 500
+
+# -------------------------------------------------------
+# Get Scan Status API
+# -------------------------------------------------------
+@main.route('/api/scans/<int:scan_id>/status', methods=['GET'])
+def get_scan_status(scan_id):
+    """
+    Get current status of a scan for the logged-in user.
+    """
+    try:
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+
+        user_id = session['user_id']
+        scan = Scan.query.filter_by(scan_id=scan_id, user_id=user_id).first()
+
+        if not scan:
+            return jsonify({'success': False, 'message': 'Scan not found'}), 404
+
+        return jsonify({
+            'success': True,
+            'scan': {
+                'scan_id': scan.scan_id,
+                'status': scan.status,
+                'vulnerable_count': scan.vulnerable_count or 0,
+                'start_time': scan.start_time.isoformat() if scan.start_time else None,
+                'end_time': scan.end_time.isoformat() if scan.end_time else None,
+                'baseURL': scan.baseURL,
+                'app_name': scan.application.name if scan.application else 'Unknown'
+            }
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# -------------------------------------------------------
+# Get User's Scans API
+# -------------------------------------------------------
+@main.route('/api/scans', methods=['GET'])
+def get_user_scans():
+    """
+    Fetch all scans for the authenticated user (limit 50 recent).
+    """
+    try:
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+
+        user_id = session['user_id']
+        scans = Scan.query.filter_by(user_id=user_id).order_by(Scan.created_at.desc()).limit(50).all()
+
+        scan_list = [{
+            'scan_id': s.scan_id,
+            'baseURL': s.baseURL,
+            'status': s.status,
+            'vulnerable_count': s.vulnerable_count or 0,
+            'start_time': s.start_time.isoformat() if s.start_time else None,
+            'end_time': s.end_time.isoformat() if s.end_time else None,
+            'app_name': s.application.name if s.application else 'Unknown'
+        } for s in scans]
+
+        return jsonify({'success': True, 'scans': scan_list})
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# -------------------------------------------------------
+# Delete Scan API
+# -------------------------------------------------------
+@main.route('/api/scans/<int:scan_id>', methods=['DELETE'])
+def delete_scan(scan_id):
+    """
+    Delete a specific scan for the authenticated user.
+    """
+    try:
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+
+        user_id = session['user_id']
+        scan = Scan.query.filter_by(scan_id=scan_id, user_id=user_id).first()
+
+        if not scan:
+            return jsonify({'success': False, 'message': 'Scan not found'}), 404
+
+        db.session.delete(scan)
+        db.session.commit()
+
+        return jsonify({'success': True, 'message': 'Scan deleted successfully'})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# -------------------------------------------------------
+# Batch Scan Page Route
+# -------------------------------------------------------
+
+@main.route('/batch-scan')
+def batch_scan():
+    if "username" not in session:
+        return redirect(url_for('main.login'))
+
+    username = session['username']
+    user = SystemUser.query.filter_by(username=username).first()
+    if not user:
+        return redirect(url_for('main.login'))
+
+    # Fetch all applications owned by this user (for dropdown if needed)
+    apps = Application.query.filter_by(user_id=user.user_id).all()
+
+    return render_template('batch_scan.html', username=username, apps=apps)
+
+
+# API to start batch scan
+@main.route('/api/batch-scans/start', methods=['POST'])
+def start_batch_scan():
+    try:
+        if "username" not in session:
+            return jsonify({'success': False, 'message': 'Unauthorized access'}), 401
+
+        data = request.get_json()
+        username = session['username']
+        user = SystemUser.query.filter_by(username=username).first()
+
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+
+        urls = data.get('urls', [])
+        settings = data.get('settings', {})
+        roles = data.get('roles', [])
+        options = data.get('options', {})
+        execution = data.get('execution', {})
+
+        if not urls:
+            return jsonify({'success': False, 'message': 'No URLs provided.'}), 400
+
+        scan_count = 0
+        for item in urls:
+            base_url = item.get('url')
+            app_name = item.get('app_name')
+
+            # Check if app exists or create new one
+            app = Application.query.filter_by(name=app_name, user_id=user.user_id).first()
+            if not app:
+                app = Application(
+                    user_id=user.user_id,
+                    name=app_name,
+                    base_url=base_url,
+                    description="Imported via batch scan",
+                    created_at=datetime.utcnow()
+                )
+                db.session.add(app)
+                db.session.commit()
+
+            # Create Scan entry
+            new_scan = Scan(
+                app_id=app.app_id,
+                user_id=user.user_id,
+                baseURL=base_url,
+                maxDepth=settings.get('maxDepth', 3),
+                start_time=datetime.utcnow(),
+                status='Queued',
+                vulnerable_count=0
+            )
+            db.session.add(new_scan)
+            scan_count += 1
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Batch scan started successfully.',
+            'scan_count': scan_count
+        }), 201
+
+    except Exception as e:
+        print("Batch Scan Error:", e)
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'Internal Server Error'}), 500
+
+# -------------------------------------------------------
+# Reports Page Route
+# -------------------------------------------------------
+@main.route('/reports')
+def reports():
+    """Main reports listing page"""
+    # Check if logged in
+    if 'user_id' not in session:
+        return redirect(url_for('main.login'))
+    
+    user_id = session['user_id']
+    user = SystemUser.query.get(user_id)
+    
+    if not user:
+        session.clear()
+        return redirect(url_for('main.login'))
+    
+    # Fetch user's scans for the reports list
+    scans = Scan.query.filter_by(user_id=user_id).order_by(Scan.created_at.desc()).all()
+    
+    return render_template('scan_history.html', username=user.username, scans=scans)
+
+# -------------------------------------------------------
+# Individual Report Page Route
+# -------------------------------------------------------
+@main.route('/report')
+@main.route('/report/<int:scan_id>')
+def report(scan_id=None):
+    """Display individual scan report page"""
+    # Check if logged in
+    if 'user_id' not in session:
+        return redirect(url_for('main.login'))
+    
+    user_id = session['user_id']
+    user = SystemUser.query.get(user_id)
+    
+    if not user:
+        session.clear()
+        return redirect(url_for('main.login'))
+    
+    # If no scan_id provided, redirect to reports list
+    if not scan_id:
+        return redirect(url_for('main.reports'))
+    
+    # Fetch the specific scan
+    scan = Scan.query.filter_by(scan_id=scan_id, user_id=user_id).first()
+    
+    if not scan:
+        # Scan not found or doesn't belong to user
+        return redirect(url_for('main.reports'))
+    
+    # Fetch report data (you can expand this based on your Report model)
+    report_data = Report.query.filter_by(scan_id=scan_id).first()
+    
+    return render_template(
+        'report.html', 
+        username=user.username,
+        scan=scan,
+        report_data=report_data,
+        scan_id=scan_id
+    )
+
+# -------------------------------------------------------
+# Get Report Data API
+# -------------------------------------------------------
+@main.route('/api/reports/<int:scan_id>', methods=['GET'])
+def get_report_data(scan_id):
+    """API to get report data for a specific scan"""
+    try:
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+
+        user_id = session['user_id']
+        
+        # Verify the scan belongs to the user
+        scan = Scan.query.filter_by(scan_id=scan_id, user_id=user_id).first()
+        if not scan:
+@main.route('/batch-scan')
+def batch_scan():
+    if "username" not in session:
+        return redirect(url_for('main.login'))
+
+    username = session['username']
+    user = SystemUser.query.filter_by(username=username).first()
+    if not user:
+        return redirect(url_for('main.login'))
+
+    # Fetch all applications owned by this user (for dropdown if needed)
+    apps = Application.query.filter_by(user_id=user.user_id).all()
+
+    return render_template('batch_scan.html', username=username, apps=apps)
+
+
+# API to start batch scan
+@main.route('/api/batch-scans/start', methods=['POST'])
+def start_batch_scan():
+    try:
+        if "username" not in session:
+            return jsonify({'success': False, 'message': 'Unauthorized access'}), 401
+
+        data = request.get_json()
+        username = session['username']
+        user = SystemUser.query.filter_by(username=username).first()
+
+        if not user:
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+
+        urls = data.get('urls', [])
+        settings = data.get('settings', {})
+        roles = data.get('roles', [])
+        options = data.get('options', {})
+        execution = data.get('execution', {})
+
+        if not urls:
+            return jsonify({'success': False, 'message': 'No URLs provided.'}), 400
+
+        scan_count = 0
+        for item in urls:
+            base_url = item.get('url')
+            app_name = item.get('app_name')
+
+            # Check if app exists or create new one
+            app = Application.query.filter_by(name=app_name, user_id=user.user_id).first()
+            if not app:
+                app = Application(
+                    user_id=user.user_id,
+                    name=app_name,
+                    base_url=base_url,
+                    description="Imported via batch scan",
+                    created_at=datetime.utcnow()
+                )
+                db.session.add(app)
+                db.session.commit()
+
+            # Create Scan entry
+            new_scan = Scan(
+                app_id=app.app_id,
+                user_id=user.user_id,
+                baseURL=base_url,
+                maxDepth=settings.get('maxDepth', 3),
+                start_time=datetime.utcnow(),
+                status='Queued',
+                vulnerable_count=0
+            )
+            db.session.add(new_scan)
+            scan_count += 1
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Batch scan started successfully.',
+            'scan_count': scan_count
+        }), 201
+
+    except Exception as e:
+        print("Batch Scan Error:", e)
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'Internal Server Error'}), 500
+
+# -------------------------------------------------------
+# Reports Page Route
+# -------------------------------------------------------
+@main.route('/reports')
+def reports():
+    """Main reports listing page"""
+    # Check if logged in
+    if 'user_id' not in session:
+        return redirect(url_for('main.login'))
+    
+    user_id = session['user_id']
+    user = SystemUser.query.get(user_id)
+    
+    if not user:
+        session.clear()
+        return redirect(url_for('main.login'))
+    
+    # Fetch user's scans for the reports list
+    scans = Scan.query.filter_by(user_id=user_id).order_by(Scan.created_at.desc()).all()
+    
+    return render_template('scan_history.html', username=user.username, scans=scans)
+
+# -------------------------------------------------------
+# Individual Report Page Route
+# -------------------------------------------------------
+@main.route('/report')
+@main.route('/report/<int:scan_id>')
+def report(scan_id=None):
+    """Display individual scan report page"""
+    # Check if logged in
+    if 'user_id' not in session:
+        return redirect(url_for('main.login'))
+    
+    user_id = session['user_id']
+    user = SystemUser.query.get(user_id)
+    
+    if not user:
+        session.clear()
+        return redirect(url_for('main.login'))
+    
+    # If no scan_id provided, redirect to reports list
+    if not scan_id:
+        return redirect(url_for('main.reports'))
+    
+    # Fetch the specific scan
+    scan = Scan.query.filter_by(scan_id=scan_id, user_id=user_id).first()
+    
+    if not scan:
+        # Scan not found or doesn't belong to user
+        return redirect(url_for('main.reports'))
+    
+    # Fetch report data (you can expand this based on your Report model)
+    report_data = Report.query.filter_by(scan_id=scan_id).first()
+    
+    return render_template(
+        'report.html', 
+        username=user.username,
+        scan=scan,
+        report_data=report_data,
+        scan_id=scan_id
+    )
+
+# -------------------------------------------------------
+# Get Report Data API
+# -------------------------------------------------------
+@main.route('/api/reports/<int:scan_id>', methods=['GET'])
+def get_report_data(scan_id):
+    """API to get report data for a specific scan"""
+    try:
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+
+        user_id = session['user_id']
+        
+        # Verify the scan belongs to the user
+        scan = Scan.query.filter_by(scan_id=scan_id, user_id=user_id).first()
+        if not scan:
+            return jsonify({'success': False, 'message': 'Report not found'}), 404
+        
+        # Fetch report data (you can customize this based on your data structure)
+        report_data = {
+            'scan_id': scan.scan_id,
+            'base_url': scan.baseURL,
+            'status': scan.status,
+            'start_time': scan.start_time.isoformat() if scan.start_time else None,
+            'end_time': scan.end_time.isoformat() if scan.end_time else None,
+            'vulnerable_count': scan.vulnerable_count or 0,
+            'app_name': scan.application.name if scan.application else 'Unknown'
+        }
+        
+        return jsonify({'success': True, 'report': report_data})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# -------------------------------------------------------
+# Bulk Delete Scans API
+# -------------------------------------------------------
+@main.route('/api/scans/bulk-delete', methods=['POST'])
+def bulk_delete_scans():
+    """Delete multiple scans at once"""
+    try:
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+
+        user_id = session['user_id']
+        data = request.get_json()
+        scan_ids = data.get('scan_ids', [])
+
+        if not scan_ids:
+            return jsonify({'success': False, 'message': 'No scan IDs provided'}), 400
+
+        # Verify all scans belong to the user and delete them
+        deleted_count = 0
+        for scan_id in scan_ids:
+            scan = Scan.query.filter_by(scan_id=scan_id, user_id=user_id).first()
+            if scan:
+                db.session.delete(scan)
+                deleted_count += 1
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'{deleted_count} scan(s) deleted successfully',
+            'deleted_count': deleted_count
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# -------------------------------------------------------
+# Export Single Scan Report (CSV)
+# -------------------------------------------------------
+@main.route('/api/scans/<int:scan_id>/export', methods=['GET'])
+def export_scan(scan_id):
+    """Export a single scan report as CSV"""
+    try:
+        from flask import make_response
+        import io
+        import csv
+
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+
+        user_id = session['user_id']
+        scan = Scan.query.filter_by(scan_id=scan_id, user_id=user_id).first()
+
+        if not scan:
+            return jsonify({'success': False, 'message': 'Scan not found'}), 404
+
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        # Write headers
+        writer.writerow(['Scan Report'])
+        writer.writerow([])
+        writer.writerow(['Scan ID', f'#SC-{scan_id:04d}'])
+        writer.writerow(['Application', scan.application.name if scan.application else 'Unknown'])
+        writer.writerow(['URL', scan.baseURL or 'N/A'])
+        writer.writerow(['Status', scan.status or 'Unknown'])
+        writer.writerow(['Start Time', scan.start_time.strftime('%Y-%m-%d %H:%M:%S') if scan.start_time else 'N/A'])
+        writer.writerow(['End Time', scan.end_time.strftime('%Y-%m-%d %H:%M:%S') if scan.end_time else 'N/A'])
+        writer.writerow(['Vulnerabilities Found', scan.vulnerable_count or 0])
+        writer.writerow([])
+
+        # Get violations if they exist
+        violations = Violation.query.filter_by(scan_id=scan_id).all()
+        if violations:
+            writer.writerow(['Vulnerabilities'])
+            writer.writerow(['URL', 'Type', 'Severity', 'Description'])
+            for v in violations:
+                writer.writerow([
+                    v.url or 'N/A',
+                    v.violation_type or 'N/A',
+                    v.severity or 'N/A',
+                    v.description or 'N/A'
+                ])
+
+        # Create response
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename=scan_report_{scan_id}.csv'
+
+        return response
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# -------------------------------------------------------
+# Bulk Export Scans (ZIP)
+# -------------------------------------------------------
+@main.route('/api/scans/bulk-export', methods=['POST'])
+def bulk_export_scans():
+    """Export multiple scan reports as a ZIP file"""
+    try:
+        from flask import make_response, send_file
+        import io
+        import zipfile
+        import csv
+
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+
+        user_id = session['user_id']
+        data = request.get_json()
+        scan_ids = data.get('scan_ids', [])
+
+        if not scan_ids:
+            return jsonify({'success': False, 'message': 'No scan IDs provided'}), 400
+
+        # Create ZIP file in memory
+        memory_file = io.BytesIO()
+        with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for scan_id in scan_ids:
+                scan = Scan.query.filter_by(scan_id=scan_id, user_id=user_id).first()
+                if not scan:
+                    continue
+
+                # Create CSV for this scan
+                output = io.StringIO()
+                writer = csv.writer(output)
+
+                writer.writerow(['Scan Report'])
+                writer.writerow([])
+                writer.writerow(['Scan ID', f'#SC-{scan_id:04d}'])
+                writer.writerow(['Application', scan.application.name if scan.application else 'Unknown'])
+                writer.writerow(['URL', scan.baseURL or 'N/A'])
+                writer.writerow(['Status', scan.status or 'Unknown'])
+                writer.writerow(['Start Time', scan.start_time.strftime('%Y-%m-%d %H:%M:%S') if scan.start_time else 'N/A'])
+                writer.writerow(['End Time', scan.end_time.strftime('%Y-%m-%d %H:%M:%S') if scan.end_time else 'N/A'])
+                writer.writerow(['Vulnerabilities Found', scan.vulnerable_count or 0])
+                writer.writerow([])
+
+                violations = Violation.query.filter_by(scan_id=scan_id).all()
+                if violations:
+                    writer.writerow(['Vulnerabilities'])
+                    writer.writerow(['URL', 'Type', 'Severity', 'Description'])
+                    for v in violations:
+                        writer.writerow([
+                            v.url or 'N/A',
+                            v.violation_type or 'N/A',
+                            v.severity or 'N/A',
+                            v.description or 'N/A'
+                        ])
+
+                # Add to ZIP
+                zf.writestr(f'scan_report_{scan_id}.csv', output.getvalue())
+
+        memory_file.seek(0)
+
+        return send_file(
+            memory_file,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name='scan_reports.zip'
+        )
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# -------------------------------------------------------
+# Logout Route
+# -------------------------------------------------------
+@main.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('main.login'))

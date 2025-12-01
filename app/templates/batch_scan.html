@@ -1,0 +1,843 @@
+{% extends "base.html" %}
+
+{% block body %}
+
+<title>New Scan - Perimeter</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='batch-scan.css') }}">
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <svg class="logo-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <span class="brand-name">Perimeter</span>
+        </div>
+        
+        <nav class="sidebar-nav">
+            <a href="/dashboard" class="nav-item">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                <span>Dashboard</span>
+            </a>
+            <a href="/quick-scan" class="nav-item">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <span>Quick Scan</span>
+            </a>
+            <a href="/batch-scan" class="nav-item active">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6" **width="20" height="20"**>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z" />
+                </svg>
+
+                <span>Batch Scan</span>
+            </a>
+            <a href="/reports" class="nav-item">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span>Scan History</span>
+            </a>
+            <a href="#" class="nav-item">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <span>Settings</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <a href="/logout" class="nav-item">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Logout</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Header -->
+        <header class="page-header">
+            <div>
+                <h1 class="page-title">Batch Scan</h1>
+                <p class="page-subtitle">Set up vulnerability detection scan for multiple web application</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn-secondary" onclick="window.location.href='/dashboard'">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    Back to Dashboard
+                </button>
+            </div>
+        </header>
+
+        <!-- Scan Configuration Form -->
+        <div class="scan-form-container">
+            <form id="scanForm" class="scan-form">
+
+                <!-- Authentication -->
+                <section class="form-section">
+                    <div class="section-header">
+                        <div class="section-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="section-title">Authentication Profiles</h2>
+                            <p class="section-desc">Add credentials for testing authenticated sections. Multiple profiles supported for different user roles.</p>
+                        </div>
+                    </div>
+
+                    <div class="auth-profiles-container" id="authProfilesContainer">
+                        <!-- Default auth profile -->
+                        <div class="auth-profile-card">
+                            <div class="auth-profile-header">
+                                <h4 class="auth-profile-title">Authentication Profile #1</h4>
+                                <button type="button" class="btn-remove-auth" onclick="removeAuthProfile(this)">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="profileName1" class="form-label">
+                                        Profile Name
+                                        <span class="required">*</span>
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        id="profileName1" 
+                                        class="form-input" 
+                                        placeholder="e.g., Admin Account, Test User"
+                                        value="Admin Account"
+                                    >
+                                    <small class="form-hint">A descriptive name for this authentication profile</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="targetWebsite1" class="form-label">
+                                        Target Website
+                                        <span class="required">*</span>
+                                    </label>
+                                    <input 
+                                        type="url" 
+                                        id="targetWebsite1" 
+                                        class="form-input" 
+                                        placeholder="https://example.com"
+                                        value=""
+                                    >
+                                    <small class="form-hint">The website where these credentials are used</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="loginURL1" class="form-label">
+                                        Login URL
+                                        <span class="required">*</span>
+                                    </label>
+                                    <input 
+                                        type="url" 
+                                        id="loginURL1" 
+                                        class="form-input" 
+                                        placeholder="https://example.com/login"
+                                    >
+                                    <small class="form-hint">The exact login page URL</small>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="authMethod1" class="form-label">Authentication Method</label>
+                                    <select id="authMethod1" class="form-input">
+                                        <option value="form">Form-based Login</option>
+                                        <option value="basic">HTTP Basic Auth</option>
+                                        <option value="bearer">Bearer Token</option>
+                                        <option value="cookie">Cookie-based</option>
+                                        <option value="oauth">OAuth/SAML</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="username1" class="form-label">
+                                        Username/Email
+                                        <span class="required">*</span>
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        id="username1" 
+                                        class="form-input" 
+                                        placeholder="admin@example.com or username"
+                                        autocomplete="off"
+                                    >
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="password1" class="form-label">
+                                        Password
+                                        <span class="required">*</span>
+                                    </label>
+                                    <input 
+                                        type="password" 
+                                        id="password1" 
+                                        class="form-input" 
+                                        placeholder="••••••••"
+                                        autocomplete="off"
+                                    >
+                                </div>
+
+                                <div class="form-group full-width">
+                                    <label for="userRole1" class="form-label">User Role</label>
+                                    <select id="userRole1" class="form-input">
+                                        <option value="">-- Select Role --</option>
+                                        <option value="admin" selected>Admin</option>
+                                        <option value="user">User</option>
+                                        <option value="moderator">Moderator</option>
+                                        <option value="guest">Guest</option>
+                                        <option value="custom">Custom</option>
+                                    </select>
+                                    <small class="form-hint">Associate this profile with a user role for access control testing</small>
+                                </div>
+
+                                <div class="form-group full-width" id="customRoleContainer1" style="display: none;">
+                                    <label for="customRole1" class="form-label">Custom Role Name</label>
+                                    <input 
+                                        type="text" 
+                                        id="customRole1" 
+                                        class="form-input" 
+                                        placeholder="Enter custom role name"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn-add-auth" onclick="addAuthProfile()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Add Another Authentication Profile
+                    </button>
+
+                    <div class="auth-hint">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        </svg>
+                        <span>Add multiple profiles to test different user roles and access levels. Leave empty for unauthenticated scanning.</span>
+                    </div>
+                </section>
+
+                <!-- Crawl Configuration -->
+                <section class="form-section">
+                    <div class="section-header">
+                        <div class="section-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="16 18 22 12 16 6"></polyline>
+                                <polyline points="8 6 2 12 8 18"></polyline>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="section-title">Crawl Configuration</h2>
+                            <p class="section-desc">Configure how Playwright will crawl your application</p>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="maxDepth" class="form-label">
+                                Maximum Crawl Depth
+                                <span class="required">*</span>
+                            </label>
+                            <input 
+                                type="number" 
+                                id="maxDepth" 
+                                class="form-input" 
+                                value="3"
+                                min="1"
+                                max="10"
+                                required
+                            >
+                            <small class="form-hint">How many levels deep to crawl (1-10)</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="crawlDelay" class="form-label">Crawl Delay (ms)</label>
+                            <input 
+                                type="number" 
+                                id="crawlDelay" 
+                                class="form-input" 
+                                value="1000"
+                                min="0"
+                                max="10000"
+                                step="100"
+                            >
+                            <small class="form-hint">Delay between requests in milliseconds</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="timeout" class="form-label">Page Timeout (seconds)</label>
+                            <input 
+                                type="number" 
+                                id="timeout" 
+                                class="form-input" 
+                                value="30"
+                                min="10"
+                                max="120"
+                            >
+                            <small class="form-hint">Maximum time to wait for page load</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="maxPages" class="form-label">Max Pages</label>
+                            <input 
+                                type="number" 
+                                id="maxPages" 
+                                class="form-input" 
+                                value="100"
+                                min="1"
+                                max="1000"
+                            >
+                            <small class="form-hint">Maximum number of pages to crawl</small>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Scan Options -->
+                <section class="form-section">
+                    <div class="section-header">
+                        <div class="section-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M12 1v6m0 6v6m5.196-14.196l-4.243 4.243m0 5.657l-4.242 4.242M23 12h-6m-6 0H1m14.196 5.196l-4.243-4.243m0-5.657L6.804 2.804"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="section-title">Scan Options</h2>
+                            <p class="section-desc">Additional configuration for the scan</p>
+                        </div>
+                    </div>
+
+                    <div class="options-grid">
+                        <label class="option-card">
+                            <input type="checkbox" id="checkBrokenAccessControl" class="option-input" checked>
+                            <div class="option-content">
+                                <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                                </svg>
+                                <div>
+                                    <div class="option-title">Broken Access Control</div>
+                                    <div class="option-desc">Test for unauthorized access to resources</div>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="option-card">
+                            <input type="checkbox" id="checkPrivilegeEscalation" class="option-input" checked>
+                            <div class="option-content">
+                                <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                                    <polyline points="17 6 23 6 23 12"></polyline>
+                                </svg>
+                                <div>
+                                    <div class="option-title">Privilege Escalation</div>
+                                    <div class="option-desc">Detect elevation of privileges vulnerabilities</div>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="option-card">
+                            <input type="checkbox" id="checkSessionManagement" class="option-input" checked>
+                            <div class="option-content">
+                                <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2v20M2 12h20"></path>
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                </svg>
+                                <div>
+                                    <div class="option-title">Session Management</div>
+                                    <div class="option-desc">Check for session-related vulnerabilities</div>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="option-card">
+                            <input type="checkbox" id="followRedirects" class="option-input" checked>
+                            <div class="option-content">
+                                <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="17 1 21 5 17 9"></polyline>
+                                    <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                                    <polyline points="7 23 3 19 7 15"></polyline>
+                                    <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                                </svg>
+                                <div>
+                                    <div class="option-title">Follow Redirects</div>
+                                    <div class="option-desc">Automatically follow HTTP redirects</div>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="option-card">
+                            <input type="checkbox" id="checkCORS" class="option-input">
+                            <div class="option-content">
+                                <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="22" y1="12" x2="18" y2="12"></line>
+                                    <line x1="6" y1="12" x2="2" y2="12"></line>
+                                    <line x1="12" y1="6" x2="12" y2="2"></line>
+                                    <line x1="12" y1="22" x2="12" y2="18"></line>
+                                </svg>
+                                <div>
+                                    <div class="option-title">CORS Issues</div>
+                                    <div class="option-desc">Check for Cross-Origin Resource Sharing problems</div>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="option-card">
+                            <input type="checkbox" id="captureScreenshots" class="option-input">
+                            <div class="option-content">
+                                <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                    <circle cx="12" cy="13" r="4"></circle>
+                                </svg>
+                                <div>
+                                    <div class="option-title">Capture Screenshots</div>
+                                    <div class="option-desc">Save screenshots of vulnerable pages</div>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </section>
+
+                <!-- Execution Settings -->
+                <section class="form-section">
+                    <div class="section-header">
+                        <div class="section-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="section-title">Execution Settings</h2>
+                            <p class="section-desc">Configure how the batch scan will be executed</p>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="executionMode" class="form-label">Execution Mode</label>
+                            <select id="executionMode" class="form-input">
+                                <option value="sequential">Sequential (One at a time)</option>
+                                <option value="parallel">Parallel (2 concurrent)</option>
+                                <option value="parallel-4">Parallel (4 concurrent)</option>
+                            </select>
+                            <small class="form-hint">How to run multiple scans</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="delayBetweenScans" class="form-label">Delay Between Scans (seconds)</label>
+                            <input 
+                                type="number" 
+                                id="delayBetweenScans" 
+                                class="form-input" 
+                                value="5"
+                                min="0"
+                                max="300"
+                            >
+                            <small class="form-hint">Wait time before starting next scan</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="stopOnError" class="checkbox-input">
+                            <span class="checkbox-text">Stop batch execution if any scan fails</span>
+                        </label>
+                    </div>
+                </section>
+
+                <!-- Form Actions -->
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="saveDraft()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            <polyline points="7 3 7 8 15 8"></polyline>
+                        </svg>
+                        Save as Template
+                    </button>
+                    <div class="action-group">
+                        <!-- <button type="button" class="btn-outline" onclick="window.location.href='/dashboard'">Cancel</button> -->
+                        <button type="submit" class="btn-primary" id="startScanBtn">
+                            <span id="btnText">Start Scan</span>
+                            <svg id="btnIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            <span id="btnLoader" class="btn-loader" style="display: none;">
+                                <svg class="spinner" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let authProfileCount = 1;
+
+        // Add new role
+        function addRole() {
+            const container = document.getElementById('rolesContainer');
+            const roleItem = document.createElement('div');
+            roleItem.className = 'role-item';
+            roleItem.innerHTML = `
+                <input type="text" class="role-input" placeholder="Role name (e.g., Admin, User, Guest)">
+                <button type="button" class="btn-remove-role" onclick="removeRole(this)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            `;
+            container.appendChild(roleItem);
+        }
+
+        // Remove role
+        function removeRole(button) {
+            const roleItem = button.parentElement;
+            const container = document.getElementById('rolesContainer');
+            if (container.children.length > 1) {
+                roleItem.remove();
+            } else {
+                alert('At least one role is required');
+            }
+        }
+
+        // Add new authentication profile
+        function addAuthProfile() {
+            authProfileCount++;
+            const container = document.getElementById('authProfilesContainer');
+            const newProfile = document.createElement('div');
+            newProfile.className = 'auth-profile-card';
+            newProfile.innerHTML = `
+                <div class="auth-profile-header">
+                    <h4 class="auth-profile-title">Authentication Profile #${authProfileCount}</h4>
+                    <button type="button" class="btn-remove-auth" onclick="removeAuthProfile(this)">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="profileName${authProfileCount}" class="form-label">
+                            Profile Name
+                            <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="profileName${authProfileCount}" 
+                            class="form-input" 
+                            placeholder="e.g., Admin Account, Test User"
+                        >
+                        <small class="form-hint">A descriptive name for this authentication profile</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="targetWebsite${authProfileCount}" class="form-label">
+                            Target Website
+                            <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="url" 
+                            id="targetWebsite${authProfileCount}" 
+                            class="form-input" 
+                            placeholder="https://example.com"
+                        >
+                        <small class="form-hint">The website where these credentials are used</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="loginURL${authProfileCount}" class="form-label">
+                            Login URL
+                            <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="url" 
+                            id="loginURL${authProfileCount}" 
+                            class="form-input" 
+                            placeholder="https://example.com/login"
+                        >
+                        <small class="form-hint">The exact login page URL</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="authMethod${authProfileCount}" class="form-label">Authentication Method</label>
+                        <select id="authMethod${authProfileCount}" class="form-input">
+                            <option value="form">Form-based Login</option>
+                            <option value="basic">HTTP Basic Auth</option>
+                            <option value="bearer">Bearer Token</option>
+                            <option value="cookie">Cookie-based</option>
+                            <option value="oauth">OAuth/SAML</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="username${authProfileCount}" class="form-label">
+                            Username/Email
+                            <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            id="username${authProfileCount}" 
+                            class="form-input" 
+                            placeholder="admin@example.com or username"
+                            autocomplete="off"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password${authProfileCount}" class="form-label">
+                            Password
+                            <span class="required">*</span>
+                        </label>
+                        <input 
+                            type="password" 
+                            id="password${authProfileCount}" 
+                            class="form-input" 
+                            placeholder="••••••••"
+                            autocomplete="off"
+                        >
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label for="userRole${authProfileCount}" class="form-label">User Role</label>
+                        <select id="userRole${authProfileCount}" class="form-input" onchange="toggleCustomRole(this)">
+                            <option value="">-- Select Role --</option>
+                            <option value="admin">Admin</option>
+                            <option value="user">User</option>
+                            <option value="moderator">Moderator</option>
+                            <option value="guest">Guest</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                        <small class="form-hint">Associate this profile with a user role for access control testing</small>
+                    </div>
+
+                    <div class="form-group full-width" id="customRoleContainer${authProfileCount}" style="display: none;">
+                        <label for="customRole${authProfileCount}" class="form-label">Custom Role Name</label>
+                        <input 
+                            type="text" 
+                            id="customRole${authProfileCount}" 
+                            class="form-input" 
+                            placeholder="Enter custom role name"
+                        >
+                    </div>
+                </div>
+            `;
+            container.appendChild(newProfile);
+        }
+
+        // Remove authentication profile
+        function removeAuthProfile(button) {
+            const profileCard = button.closest('.auth-profile-card');
+            const container = document.getElementById('authProfilesContainer');
+            if (container.children.length > 1) {
+                profileCard.remove();
+                // Update profile numbers
+                updateProfileNumbers();
+            } else {
+                alert('At least one authentication profile is required if you want to test authenticated sections. Remove all profiles for unauthenticated scanning.');
+            }
+        }
+
+        // Update profile numbers after removal
+        function updateProfileNumbers() {
+            const profiles = document.querySelectorAll('.auth-profile-card');
+            profiles.forEach((profile, index) => {
+                const title = profile.querySelector('.auth-profile-title');
+                title.textContent = `Authentication Profile #${index + 1}`;
+            });
+            authProfileCount = profiles.length;
+        }
+
+        // Toggle custom role input
+        function toggleCustomRole(select) {
+            const profileId = select.id.replace('userRole', '');
+            const customContainer = document.getElementById(`customRoleContainer${profileId}`);
+            if (select.value === 'custom') {
+                customContainer.style.display = 'block';
+            } else {
+                customContainer.style.display = 'none';
+            }
+        }
+
+        // Initialize role change listeners for existing profiles
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add event listeners to existing role selects
+            const roleSelects = document.querySelectorAll('select[id^="userRole"]');
+            roleSelects.forEach(select => {
+                select.addEventListener('change', function() {
+                    toggleCustomRole(this);
+                });
+            });
+        });
+
+        // Save as template
+        function saveDraft() {
+            alert('Template saved successfully!');
+        }
+
+        // Form submission
+        document.getElementById('scanForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Collect all authentication profiles
+            const authProfiles = [];
+            const profileCards = document.querySelectorAll('.auth-profile-card');
+            
+            profileCards.forEach((card, index) => {
+                const profileId = index + 1;
+                const profileName = document.getElementById(`profileName${profileId}`)?.value;
+                const targetWebsite = document.getElementById(`targetWebsite${profileId}`)?.value;
+                const loginURL = document.getElementById(`loginURL${profileId}`)?.value;
+                const username = document.getElementById(`username${profileId}`)?.value;
+                const password = document.getElementById(`password${profileId}`)?.value;
+                
+                // Only add profile if required fields are filled
+                if (profileName && targetWebsite && loginURL && username && password) {
+                    const userRoleSelect = document.getElementById(`userRole${profileId}`);
+                    let userRole = userRoleSelect?.value;
+                    
+                    if (userRole === 'custom') {
+                        userRole = document.getElementById(`customRole${profileId}`)?.value || 'custom';
+                    }
+                    
+                    authProfiles.push({
+                        profile_name: profileName,
+                        target_website: targetWebsite,
+                        login_url: loginURL,
+                        auth_method: document.getElementById(`authMethod${profileId}`)?.value || 'form',
+                        username: username,
+                        password: password,
+                        user_role: userRole
+                    });
+                }
+            });
+
+            // Get form values
+            const formData = {
+                app_name: document.getElementById('appName').value,
+                baseURL: document.getElementById('baseURL').value,
+                maxDepth: parseInt(document.getElementById('maxDepth').value),
+                crawl_delay: parseInt(document.getElementById('crawlDelay').value),
+                timeout: parseInt(document.getElementById('timeout').value),
+                max_pages: parseInt(document.getElementById('maxPages').value),
+                auth_profiles: authProfiles, // Now an array of profiles
+                roles: Array.from(document.querySelectorAll('.role-input'))
+                    .map(input => input.value)
+                    .filter(value => value.trim() !== ''),
+                options: {
+                    check_broken_access_control: document.getElementById('checkBrokenAccessControl').checked,
+                    check_privilege_escalation: document.getElementById('checkPrivilegeEscalation').checked,
+                    check_session_management: document.getElementById('checkSessionManagement').checked,
+                    follow_redirects: document.getElementById('followRedirects').checked,
+                    check_cors: document.getElementById('checkCORS').checked,
+                    capture_screenshots: document.getElementById('captureScreenshots').checked
+                }
+            };
+
+            // Validation
+            if (!formData.baseURL) {
+                alert('Please enter a base URL');
+                return;
+            }
+
+            if (formData.roles.length === 0) {
+                alert('Please add at least one role');
+                return;
+            }
+
+            // Optional: Validate auth profiles if any are provided
+            if (authProfiles.length > 0) {
+                // Check if any auth profile has incomplete required fields
+                const incompleteProfiles = authProfiles.filter(profile => 
+                    !profile.profile_name || !profile.target_website || !profile.login_url || 
+                    !profile.username || !profile.password
+                );
+                
+                if (incompleteProfiles.length > 0) {
+                    alert('Please complete all required fields in your authentication profiles, or remove incomplete profiles.');
+                    return;
+                }
+            }
+
+            // Show loading state
+            const submitBtn = document.getElementById('startScanBtn');
+            const btnText = document.getElementById('btnText');
+            const btnIcon = document.getElementById('btnIcon');
+            const btnLoader = document.getElementById('btnLoader');
+
+            submitBtn.disabled = true;
+            btnText.textContent = 'Starting Scan...';
+            btnIcon.style.display = 'none';
+            btnLoader.style.display = 'inline-flex';
+
+            // Send to Flask backend - Updated URL
+            fetch('/api/scans/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Scan started successfully! Scan ID: ' + data.scan_id);
+                    window.location.href = '/dashboard';  // Updated redirect
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while starting the scan.');
+            })
+            .finally(() => {
+                submitBtn.disabled = false;
+                btnText.textContent = 'Start Scan';
+                btnIcon.style.display = 'inline';
+                btnLoader.style.display = 'none';
+            });
+        });
+    </script>
+</body>
+</html>
+
+{% endblock %}

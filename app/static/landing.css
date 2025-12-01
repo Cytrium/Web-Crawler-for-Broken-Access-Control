@@ -1,0 +1,347 @@
+/* styles.css */
+
+:root {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --text-primary: #ffffff;
+    --text-secondary: #94a3b8;
+    --accent-blue: #3b82f6;
+    --accent-blue-hover: #2563eb;
+    --border-color: #475569;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+}
+
+/* Navigation */
+.navbar {
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 1rem 0;
+}
+
+.navbar-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.navbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.icon-shield {
+    color: var(--accent-blue);
+}
+
+.brand-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+/* === Refined Button Styling === */
+.btn-primary {
+    background-color: var(--accent-blue);
+    color: #fff;
+    border: none;
+    padding: 0.6rem 1.8rem;
+    border-radius: 0.6rem;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    display: inline-block;
+    text-decoration: none; /* ensures <a> looks like a button */
+    transition: all 0.25s ease-in-out;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); /* subtle glow */
+}
+
+/* Hover effect */
+.btn-primary:hover {
+    background-color: var(--accent-blue-hover);
+    box-shadow: 0 6px 18px rgba(59, 130, 246, 0.4);
+    transform: translateY(-2px);
+}
+
+/* Active (clicked) effect */
+.btn-primary:active {
+    transform: translateY(1px);
+    box-shadow: 0 3px 8px rgba(59, 130, 246, 0.25);
+}
+
+/* Optional: for larger buttons like “Start Scan” */
+.btn-large {
+    padding: 0.8rem 2.2rem;
+    font-size: 1.125rem;
+    border-radius: 0.75rem;
+}
+
+/* Hero Section */
+.hero {
+    padding: 5rem 0;
+}
+
+.hero-content {
+    max-width: 48rem;
+    margin: 0 auto;
+    text-align: center;
+}
+
+.hero-title {
+    font-size: 3rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    line-height: 1.2;
+}
+
+.hero-subtitle {
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+}
+
+/* Features Section */
+.features {
+    padding: 5rem 0;
+}
+
+.section-title {
+    font-size: 2rem;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.feature-card {
+    background-color: var(--bg-secondary);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    height: 100%;
+    margin-bottom: 1rem;
+}
+
+.feature-icon {
+    color: var(--accent-blue);
+    margin-bottom: 1rem;
+}
+
+.feature-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+}
+
+.feature-description {
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* How It Works Section */
+.how-it-works {
+    background-color: var(--bg-secondary);
+    padding: 2rem 0;
+}
+
+.steps {
+    max-width: 48rem;
+    margin: 0 auto;
+}
+
+.step {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.step-number {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    background-color: var(--accent-blue);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+.step-content {
+    flex: 1;
+}
+
+.step-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.step-description {
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Vulnerabilities Section */
+.vulnerabilities {
+    padding: 2rem 0;
+}
+
+.vulnerability-list {
+    max-width: 48rem;
+    margin: 0 auto;
+    background-color: var(--bg-secondary);
+    border-radius: 0.5rem;
+    padding: 2rem;
+}
+
+.vulnerability-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--bg-tertiary);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.vulnerability-item:last-child {
+    margin-bottom: 0;
+}
+
+.badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.badge-critical {
+    background-color: #ef4444;
+    color: white;
+}
+
+.badge-high {
+    background-color: #f97316;
+    color: white;
+}
+
+.badge-medium {
+    background-color: #eab308;
+    color: white;
+}
+
+/* CTA Section */
+.cta {
+    padding: 5rem 0;
+}
+
+.cta-box {
+    max-width: 48rem;
+    margin: 0 auto;
+    background-color: var(--accent-blue);
+    border-radius: 0.5rem;
+    padding: 3rem;
+    text-align: center;
+}
+
+.cta-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.cta-subtitle {
+    font-size: 1.125rem;
+    margin-bottom: 1.5rem;
+}
+
+.btn-cta {
+    background-color: white;
+    color: var(--accent-blue);
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 0.5rem;
+    font-size: 1.125rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.btn-cta:hover {
+    background-color: #f3f4f6;
+}
+
+/* Footer */
+.footer {
+    background-color: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    padding: 2rem 0;
+}
+
+.footer-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.footer-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.icon-shield-small {
+    color: var(--accent-blue);
+}
+
+.footer-brand-name {
+    font-weight: 700;
+}
+
+.footer-text {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2rem;
+    }
+
+    .hero-subtitle {
+        font-size: 1rem;
+    }
+
+    .section-title {
+        font-size: 1.5rem;
+    }
+
+    .cta-title {
+        font-size: 1.5rem;
+    }
+
+    .footer-content {
+        flex-direction: column;
+        text-align: center;
+    }
+}

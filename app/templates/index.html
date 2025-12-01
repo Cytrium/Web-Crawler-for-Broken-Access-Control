@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block body %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='landing.css') }}">
+<title>Perimeter</title>
+</head>
+<body>
+    <!-- Navigation -->
+        <nav class="navbar">
+            <div class="container">
+                <div class="navbar-content">
+                    <div class="navbar-brand">
+                        <svg class="icon-shield" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                        <span class="brand-name">Perimeter</span>
+                    </div>
+                    <!-- <button class="btn-primary">Login</button> -->
+                    <a href="{{ url_for('main.login') }}" class="btn btn-primary">Login</a>
+
+                </div>
+            </div>
+        </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1 class="hero-title">Web Access Control Vulnerability Detection</h1>
+                <p class="hero-subtitle">Automated security testing for your web applications using Playwright crawler technology</p>
+                <button class="btn-primary btn-large">Start Scan</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+        <div class="container">
+            <h2 class="section-title">Key Features</h2>
+
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <svg class="feature-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        <h3 class="feature-title">Automated Crawling</h3>
+                        <p class="feature-description">Systematically discovers and maps your entire web application</p>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <svg class="feature-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        <h3 class="feature-title">Vulnerability Detection</h3>
+                        <p class="feature-description">Identifies access control flaws and authentication issues</p>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="feature-card">
+                        <svg class="feature-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        <h3 class="feature-title">Detailed Reports</h3>
+                        <p class="feature-description">Get actionable insights with comprehensive security reports</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="how-it-works">
+        <div class="container">
+            <h2 class="section-title">How It Works</h2>
+            
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3 class="step-title">Configure Target</h3>
+                        <p class="step-description">Enter your web application URL and credentials</p>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3 class="step-title">Automated Crawling</h3>
+                        <p class="step-description">Playwright explores your application and maps all endpoints</p>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3 class="step-title">Security Analysis</h3>
+                        <p class="step-description">Tests for access control vulnerabilities and misconfigurations</p>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3 class="step-title">Get Results</h3>
+                        <p class="step-description">Receive detailed reports with remediation guidance</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Vulnerabilities Section -->
+    <section class="vulnerabilities">
+        <div class="container">
+            <h2 class="section-title">Detected Vulnerabilities</h2>
+            
+            <div class="vulnerability-list">
+                <div class="vulnerability-item">
+                    <span>Broken Access Control</span>
+                    <span class="badge badge-critical">Critical</span>
+                </div>
+                <div class="vulnerability-item">
+                    <span>Authentication Bypass</span>
+                    <span class="badge badge-high">High</span>
+                </div>
+                <div class="vulnerability-item">
+                    <span>Privilege Escalation</span>
+                    <span class="badge badge-critical">Critical</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section
+    <section class="cta">
+        <div class="container">
+            <div class="cta-box">
+                <h2 class="cta-title">Ready to Secure Your Application?</h2>
+                <p class="cta-subtitle">Start detecting vulnerabilities today</p>
+                <button class="btn-cta">Start Free Trial</button>
+            </div>
+        </div>
+    </section> -->
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <svg class="icon-shield-small" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    <span class="footer-brand-name">Perimeter</span>
+                </div>
+                <div class="footer-text">
+                    © 2025 Perimeter - Powered by Flask 3.1.2 & Playwright
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
+{% endblock %}

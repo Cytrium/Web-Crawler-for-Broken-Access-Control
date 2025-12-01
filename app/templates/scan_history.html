@@ -1,0 +1,859 @@
+{% extends "base.html" %}
+
+{% block body %}
+
+    <title>Scan History - Perimeter</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='dashboard-styles.css') }}">
+    <style>
+        /* Additional styles for new features */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card-enhanced {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: all 0.3s;
+        }
+        
+        .stat-card-enhanced:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-blue);
+        }
+        
+        .filter-controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .search-input {
+            flex: 1;
+            min-width: 250px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.625rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+        
+        .filter-select {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.625rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+        
+        .th-sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 1.5rem !important;
+        }
+        
+        .th-sortable:hover {
+            background: var(--bg-hover);
+        }
+        
+        .sort-indicator {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.75rem;
+            opacity: 0.5;
+        }
+        
+        .sort-indicator.active {
+            opacity: 1;
+            color: var(--accent-blue);
+        }
+        
+        .pagination-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 0.75rem;
+        }
+        
+        .pagination-info {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .pagination-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .page-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .page-btn:hover:not(:disabled) {
+            background: var(--bg-hover);
+            border-color: var(--accent-blue);
+        }
+        
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .page-btn.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+        
+        .bulk-actions-toolbar {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1rem 1.5rem;
+            display: none;
+            align-items: center;
+            gap: 1rem;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            animation: slideUp 0.3s ease;
+        }
+        
+        .bulk-actions-toolbar.show {
+            display: flex;
+        }
+        
+        @keyframes slideUp {
+            from {
+                transform: translateX(-50%) translateY(100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .selection-count {
+            font-weight: 600;
+            color: var(--accent-blue);
+        }
+        
+        .bulk-btn {
+            background: var(--bg-hover);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            transition: all 0.3s;
+        }
+        
+        .bulk-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--accent-blue);
+        }
+        
+        .bulk-btn.danger:hover {
+            background: var(--danger);
+            border-color: var(--danger);
+        }
+        
+        tr.selected {
+            background: rgba(59, 130, 246, 0.1) !important;
+        }
+        
+        .checkbox-cell {
+            width: 40px;
+            padding-right: 0 !important;
+        }
+        
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--accent-blue);
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <svg class="logo-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <span class="brand-name">Perimeter</span>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="{{ url_for('main.dashboard') }}" class="nav-item">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                <span>Dashboard</span>
+            </a>
+            <a href="{{ url_for('main.quick_scan') }}" class="nav-item">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <span>Quick Scan</span>
+            </a>
+            <a href="{{ url_for('main.batch_scan') }}" class="nav-item">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6" width="20" height="20">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z" />
+                </svg>
+                <span>Batch Scan</span>
+            </a>
+            <a href="{{ url_for('main.reports') }}" class="nav-item active">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span>Scan History</span>
+            </a>
+            <a href="{{ url_for('main.settings') }}" class="nav-item">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <span>Settings</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <a href="{{ url_for('main.logout') }}" class="nav-item">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                <span>Logout</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div>
+                <h1 class="page-title">Scan History</h1>
+                <p class="page-subtitle">View and manage all your security scans</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn-secondary" onclick="location.reload()" title="Refresh">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                </button>
+                <button class="btn-secondary">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                </button>
+                <div class="user-profile">
+                    <span class="user-name">{{ username }}</span>
+                    <div class="user-avatar">{{ username[0].upper() if username else 'U' }}</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Summary Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card-enhanced">
+                <div class="stat-icon scan-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="total-scans">{{ scans|length if scans else 0 }}</div>
+                    <div class="stat-label">Total Scans</div>
+                </div>
+            </div>
+
+            <div class="stat-card-enhanced">
+                <div class="stat-icon vuln-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="total-vulns">
+                        {% if scans %}
+                            {{ scans | sum(attribute='vulnerable_count') | default(0) }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </div>
+                    <div class="stat-label">Vulnerabilities Found</div>
+                </div>
+            </div>
+
+            <div class="stat-card-enhanced">
+                <div class="stat-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="completed-scans">
+                        {% if scans %}
+                            {{ scans | selectattr('status', 'equalto', 'Completed') | list | length }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </div>
+                    <div class="stat-label">Completed</div>
+                </div>
+            </div>
+
+            <div class="stat-card-enhanced">
+                <div class="stat-icon role-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="running-scans">
+                        {% if scans %}
+                            {{ scans | selectattr('status', 'equalto', 'Running') | list | length }}
+                        {% else %}
+                            0
+                        {% endif %}
+                    </div>
+                    <div class="stat-label">Running</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="filter-controls">
+            <input 
+                type="text" 
+                id="search-input" 
+                class="search-input" 
+                placeholder="Search by application name or URL..."
+            >
+            
+            <select id="status-filter" class="filter-select">
+                <option value="all">All Status</option>
+                <option value="Completed">Completed</option>
+                <option value="Running">Running</option>
+                <option value="Queued">Queued</option>
+                <option value="Failed">Failed</option>
+            </select>
+
+            <select id="page-size" class="filter-select">
+                <option value="10">10 per page</option>
+                <option value="25" selected>25 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+            </select>
+        </div>
+
+        <!-- Scan History Section -->
+        <section class="results-section">
+            <div class="section-header">
+                <h2 class="section-title">All Scans</h2>
+            </div>
+
+            {% if scans and scans|length > 0 %}
+            <div class="table-container">
+                <table class="results-table" id="scans-table">
+                    <thead>
+                        <tr>
+                            <th class="checkbox-cell">
+                                <input type="checkbox" id="select-all">
+                            </th>
+                            <th class="th-sortable" data-column="scan_id">
+                                Scan ID
+                                <span class="sort-indicator">↕</span>
+                            </th>
+                            <th class="th-sortable" data-column="app_name">
+                                Application Name
+                                <span class="sort-indicator">↕</span>
+                            </th>
+                            <th class="th-sortable" data-column="url">
+                                URL
+                                <span class="sort-indicator">↕</span>
+                            </th>
+                            <th class="th-sortable" data-column="date">
+                                Date/Time
+                                <span class="sort-indicator">↕</span>
+                            </th>
+                            <th class="th-sortable" data-column="violations">
+                                Violations
+                                <span class="sort-indicator">↕</span>
+                            </th>
+                            <th class="th-sortable" data-column="status">
+                                Status
+                                <span class="sort-indicator">↕</span>
+                            </th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scans-tbody">
+                        {% for scan in scans %}
+                        <tr data-scan-id="{{ scan.scan_id }}"
+                            data-app-name="{{ scan.application.name if scan.application else 'Unknown' }}"
+                            data-url="{{ scan.baseURL if scan.baseURL else 'N/A' }}"
+                            data-date="{{ scan.created_at.strftime('%Y-%m-%d %H:%M') if scan.created_at else '' }}"
+                            data-violations="{{ scan.vulnerable_count or 0 }}"
+                            data-status="{{ scan.status or 'Unknown' }}">
+                            <td class="checkbox-cell">
+                                <input type="checkbox" class="row-checkbox" value="{{ scan.scan_id }}">
+                            </td>
+                            <td>
+                                <span class="scan-id">#SC-{{ "%04d"|format(scan.scan_id) }}</span>
+                            </td>
+                            <td>
+                                {{ scan.application.name if scan.application else 'Unknown' }}
+                            </td>
+                            <td>
+                                <span style="color: var(--text-secondary); font-size: 0.875rem;">
+                                    {{ scan.baseURL if scan.baseURL else 'N/A' }}
+                                </span>
+                            </td>
+                            <td>
+                                {{ scan.created_at.strftime('%Y-%m-%d %H:%M') if scan.created_at else 'N/A' }}
+                            </td>
+                            <td>
+                                {% if scan.vulnerable_count %}
+                                    {% if scan.vulnerable_count >= 10 %}
+                                        <span class="violation-count critical">{{ scan.vulnerable_count }}</span>
+                                    {% elif scan.vulnerable_count >= 5 %}
+                                        <span class="violation-count high">{{ scan.vulnerable_count }}</span>
+                                    {% elif scan.vulnerable_count >= 2 %}
+                                        <span class="violation-count medium">{{ scan.vulnerable_count }}</span>
+                                    {% else %}
+                                        <span class="violation-count low">{{ scan.vulnerable_count }}</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="violation-count low">0</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if scan.status == 'Completed' %}
+                                    <span class="status-badge completed">Completed</span>
+                                {% elif scan.status == 'Running' %}
+                                    <span class="status-badge running">Running</span>
+                                {% elif scan.status == 'Queued' %}
+                                    <span class="status-badge running">Queued</span>
+                                {% else %}
+                                    <span class="status-badge failed">{{ scan.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('main.report', scan_id=scan.scan_id) }}" class="action-btn" title="View Details">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                </a>
+                                <a href="/api/scans/{{ scan.scan_id }}/export" class="action-btn" title="Download Report">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div class="pagination-controls">
+                <div class="pagination-info" id="pagination-info">
+                    Showing 1-{{ [scans|length, 25]|min }} of {{ scans|length }}
+                </div>
+                <div class="pagination-buttons">
+                    <button class="page-btn" id="first-page" onclick="goToPage('first')">First</button>
+                    <button class="page-btn" id="prev-page" onclick="goToPage('prev')">Previous</button>
+                    <span id="current-page-display" style="padding: 0 1rem; color: var(--text-secondary);">Page 1</span>
+                    <button class="page-btn" id="next-page" onclick="goToPage('next')">Next</button>
+                    <button class="page-btn" id="last-page" onclick="goToPage('last')">Last</button>
+                </div>
+            </div>
+            {% else %}
+            <!-- Empty State -->
+            <div class="table-container" style="padding: 4rem 2rem; text-align: center;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1.5rem; color: var(--text-muted);">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <h3 style="color: var(--text-primary); margin-bottom: 0.5rem;">No Scans Yet</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Start your first scan to begin tracking vulnerabilities</p>
+                <a href="{{ url_for('main.quick_scan') }}" class="btn-primary" style="text-decoration: none; display: inline-flex;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    Start Quick Scan
+                </a>
+            </div>
+            {% endif %}
+        </section>
+    </div>
+
+    <!-- Bulk Actions Toolbar -->
+    <div class="bulk-actions-toolbar" id="bulk-toolbar">
+        <span class="selection-count"><span id="selected-count">0</span> selected</span>
+        <button class="bulk-btn" onclick="bulkExport()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export Selected
+        </button>
+        <button class="bulk-btn danger" onclick="bulkDelete()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            Delete Selected
+        </button>
+        <button class="bulk-btn" onclick="clearSelection()">
+            Clear Selection
+        </button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // State management
+        let allScans = [];
+        let filteredScans = [];
+        let currentPage = 1;
+        let pageSize = 25;
+        let sortColumn = 'date';
+        let sortDirection = 'desc';
+        
+        // Initialize data from server
+        function initializeScans() {
+            const rows = document.querySelectorAll('#scans-tbody tr');
+            allScans = Array.from(rows).map(row => ({
+                id: parseInt(row.dataset.scanId),
+                app_name: row.dataset.appName,
+                url: row.dataset.url,
+                date: row.dataset.date,
+                violations: parseInt(row.dataset.violations),
+                status: row.dataset.status,
+                element: row
+            }));
+            filteredScans = [...allScans];
+            applySorting();
+            updateTable();
+        }
+        
+        // Search and filter
+        document.getElementById('search-input')?.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            filteredScans = allScans.filter(scan => 
+                scan.app_name.toLowerCase().includes(searchTerm) ||
+                scan.url.toLowerCase().includes(searchTerm)
+            );
+            applyStatusFilter();
+        });
+        
+        document.getElementById('status-filter')?.addEventListener('change', () => {
+            applyStatusFilter();
+        });
+        
+        function applyStatusFilter() {
+            const statusFilter = document.getElementById('status-filter')?.value;
+            if (statusFilter && statusFilter !== 'all') {
+                filteredScans = filteredScans.filter(scan => scan.status === statusFilter);
+            }
+            currentPage = 1;
+            updateTable();
+        }
+        
+        // Sorting
+        document.querySelectorAll('.th-sortable').forEach(th => {
+            th.addEventListener('click', function() {
+                const column = this.dataset.column;
+                if (sortColumn === column) {
+                    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    sortColumn = column;
+                    sortDirection = 'asc';
+                }
+                
+                // Update indicators
+                document.querySelectorAll('.sort-indicator').forEach(ind => {
+                    ind.classList.remove('active');
+                    ind.textContent = '↕';
+                });
+                
+                const indicator = this.querySelector('.sort-indicator');
+                indicator.classList.add('active');
+                indicator.textContent = sortDirection === 'asc' ? '↑' : '↓';
+                
+                applySorting();
+                updateTable();
+            });
+        });
+        
+        function applySorting() {
+            filteredScans.sort((a, b) => {
+                let valueA = a[sortColumn];
+                let valueB = b[sortColumn];
+                
+                if (sortColumn === 'violations' || sortColumn === 'id') {
+                    valueA = parseInt(valueA) || 0;
+                    valueB = parseInt(valueB) || 0;
+                }
+                
+                if (valueA < valueB) return sortDirection === 'asc' ? -1 : 1;
+                if (valueA > valueB) return sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        
+        // Pagination
+        document.getElementById('page-size')?.addEventListener('change', (e) => {
+            pageSize = parseInt(e.target.value);
+            currentPage = 1;
+            updateTable();
+        });
+        
+        function goToPage(action) {
+            const totalPages = Math.ceil(filteredScans.length / pageSize);
+            
+            switch(action) {
+                case 'first':
+                    currentPage = 1;
+                    break;
+                case 'prev':
+                    currentPage = Math.max(1, currentPage - 1);
+                    break;
+                case 'next':
+                    currentPage = Math.min(totalPages, currentPage + 1);
+                    break;
+                case 'last':
+                    currentPage = totalPages;
+                    break;
+            }
+            
+            updateTable();
+        }
+        
+        function updateTable() {
+            const tbody = document.getElementById('scans-tbody');
+            if (!tbody) return;
+            
+            const start = (currentPage - 1) * pageSize;
+            const end = start + pageSize;
+            const pageScans = filteredScans.slice(start, end);
+            
+            // Hide all rows
+            allScans.forEach(scan => scan.element.style.display = 'none');
+            
+            // Show current page rows
+            pageScans.forEach(scan => scan.element.style.display = '');
+            
+            // Update pagination info
+            const total = filteredScans.length;
+            const showing = pageScans.length;
+            document.getElementById('pagination-info').textContent = 
+                `Showing ${start + 1}-${start + showing} of ${total}`;
+            
+            const totalPages = Math.ceil(total / pageSize);
+            document.getElementById('current-page-display').textContent = `Page ${currentPage} of ${totalPages}`;
+            
+            // Update button states
+            document.getElementById('first-page').disabled = currentPage === 1;
+            document.getElementById('prev-page').disabled = currentPage === 1;
+            document.getElementById('next-page').disabled = currentPage === totalPages;
+            document.getElementById('last-page').disabled = currentPage === totalPages;
+        }
+        
+        // Bulk selection
+        document.getElementById('select-all')?.addEventListener('change', function() {
+            const checkboxes = document.querySelectorAll('.row-checkbox');
+            const visibleCheckboxes = Array.from(checkboxes).filter(cb => 
+                cb.closest('tr').style.display !== 'none'
+            );
+            visibleCheckboxes.forEach(cb => {
+                cb.checked = this.checked;
+                cb.closest('tr').classList.toggle('selected', this.checked);
+            });
+            updateBulkToolbar();
+        });
+        
+        document.querySelectorAll('.row-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                this.closest('tr').classList.toggle('selected', this.checked);
+                updateBulkToolbar();
+                
+                // Update select-all checkbox
+                const allCheckboxes = document.querySelectorAll('.row-checkbox');
+                const visibleCheckboxes = Array.from(allCheckboxes).filter(cb => 
+                    cb.closest('tr').style.display !== 'none'
+                );
+                const allChecked = visibleCheckboxes.every(cb => cb.checked);
+                document.getElementById('select-all').checked = allChecked;
+            });
+        });
+        
+        function updateBulkToolbar() {
+            const selected = document.querySelectorAll('.row-checkbox:checked');
+            const toolbar = document.getElementById('bulk-toolbar');
+            const count = document.getElementById('selected-count');
+            
+            count.textContent = selected.length;
+            
+            if (selected.length > 0) {
+                toolbar.classList.add('show');
+            } else {
+                toolbar.classList.remove('show');
+            }
+        }
+        
+        function clearSelection() {
+            document.querySelectorAll('.row-checkbox').forEach(cb => {
+                cb.checked = false;
+                cb.closest('tr').classList.remove('selected');
+            });
+            document.getElementById('select-all').checked = false;
+            updateBulkToolbar();
+        }
+        
+        // Bulk actions
+        function bulkDelete() {
+            const selected = Array.from(document.querySelectorAll('.row-checkbox:checked'))
+                .map(cb => cb.value);
+            
+            if (selected.length === 0) return;
+            
+            if (!confirm(`Are you sure you want to delete ${selected.length} scan(s)?`)) return;
+            
+            fetch('/api/scans/bulk-delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({scan_ids: selected})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while deleting scans');
+            });
+        }
+        
+        function bulkExport() {
+            const selected = Array.from(document.querySelectorAll('.row-checkbox:checked'))
+                .map(cb => cb.value);
+            
+            if (selected.length === 0) return;
+            
+            // For bulk export, create a form and submit  it
+            fetch('/api/scans/bulk-export', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({scan_ids: selected})
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.blob();
+                }
+                throw new Error('Export failed');
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'scan_reports.zip';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while exporting scans');
+            });
+        }
+        
+        // Initialize on page load
+        if (document.getElementById('scans-tbody')) {
+            initializeScans();
+        }
+        
+        // Auto-refresh for running scans
+        {% if scans %}
+        const runningScans = {{ scans|selectattr('status', 'equalto', 'Running')|list|length }};
+        if (runningScans > 0) {
+            setTimeout(() => {
+                location.reload();
+            }, 30000); // Refresh every 30 seconds if there are running scans
+        }
+        {% endif %}
+    </script>
+</body>
+</html>
+
+{% endblock %}
