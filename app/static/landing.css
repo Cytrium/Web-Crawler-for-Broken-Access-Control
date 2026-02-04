@@ -11,6 +11,16 @@
     --border-color: #475569;
 }
 
+/* Light Theme */
+[data-theme="light"] {
+    --bg-primary: #c6d8f1;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #e2e8f0;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --border-color: #d1d9e6;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -120,7 +130,7 @@ body {
 
 /* Features Section */
 .features {
-    padding: 5rem 0;
+    padding: 2rem 0;
 }
 
 .section-title {

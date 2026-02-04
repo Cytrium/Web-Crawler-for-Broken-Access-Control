@@ -15,6 +15,24 @@
     --warning: #f59e0b;
     --danger: #ef4444;
     --info: #06b6d4;
+    --gauge-bg: #334155;
+    --avatar-gradient-start: #3b82f6;
+    --avatar-gradient-end: #06b6d4;
+}
+
+/* Light Theme */
+[data-theme="light"] {
+    --bg-primary: #c6d8f1;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --bg-hover: #e2e8f0;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --text-muted: #94a3b8;
+    --border-color: #cbd5e1;
+    --gauge-bg: #cbd5e1;
+    --avatar-gradient-start: #2563eb;
+    --avatar-gradient-end: #0891b2;
 }
 
 * {
@@ -162,12 +180,13 @@ body {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-blue), var(--info));
+    background: linear-gradient(135deg, var(--avatar-gradient-start), var(--avatar-gradient-end));
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 600;
     font-size: 0.875rem;
+    color: #ffffff;
 }
 
 /* Overview Section */
@@ -287,6 +306,7 @@ body {
 
 .gauge-bg {
     stroke-linecap: round;
+    stroke: var(--gauge-bg);
 }
 
 .gauge-fill {

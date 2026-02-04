@@ -53,6 +53,14 @@
                 </svg>
                 <span>Settings</span>
             </a>
+            {% if is_admin %}
+            <a href="{{ url_for('admin.dashboard') }}" class="nav-item admin-link">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+                <span>Admin Panel</span>
+            </a>
+            {% endif %}
         </nav>
 
         <div class="sidebar-footer">
@@ -214,6 +222,108 @@
                         </div>
                     </div>
                 </section>
+                
+                <!-- Crawl Configuration -->
+                <section class="form-section">
+                    <div class="section-header">
+                        <div class="section-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="16 18 22 12 16 6"></polyline>
+                                <polyline points="8 6 2 12 8 18"></polyline>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="section-title">Crawl Configuration</h2>
+                            <p class="section-desc">Configure how Playwright will crawl your application</p>
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="maxDepth" class="form-label">
+                                Maximum Crawl Depth (1 - 5)
+                                <span class="required">*</span>
+                            </label>
+                            <input 
+                                type="number" 
+                                id="maxDepth" 
+                                class="form-input" 
+                                value="3"
+                                min="1"
+                                max="10"
+                                required
+                            >
+                            <!-- <small class="form-hint">How many levels deep to crawl (1-10)</small> -->
+                            <small class="form-hint">E.g. 3 means the crawler will explore up to 3 URL levels deep, such as DVWA/vulnerabilities/weak_id/.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="crawlDelay" class="form-label">Crawl Delay (ms)</label>
+                            <input 
+                                type="number" 
+                                id="crawlDelay" 
+                                class="form-input" 
+                                value="1000"
+                                min="0"
+                                max="10000"
+                                step="100"
+                            >
+                            <small class="form-hint">Delay between requests in milliseconds</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="timeout" class="form-label">Page Timeout (seconds)</label>
+                            <input 
+                                type="number" 
+                                id="timeout" 
+                                class="form-input" 
+                                value="30"
+                                min="10"
+                                max="120"
+                            >
+                            <small class="form-hint">Maximum time to wait for page load</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="maxPages" class="form-label">Max Pages</label>
+                            <input 
+                                type="number" 
+                                id="maxPages" 
+                                class="form-input" 
+                                value="100"
+                                min="1"
+                                max="1000"
+                            >
+                            <small class="form-hint">Maximum number of pages to crawl</small>
+                        </div>
+
+                        <!-- Manual Login Option -->
+                        <div class="form-group" style="grid-column: 1 / -1; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                                <label class="toggle-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                    <input type="checkbox" id="manualLogin" style="width: 18px; height: 18px; accent-color: var(--accent-color);">
+                                    <span style="font-weight: 500;">Enable Manual Login</span>
+                                </label>
+                                <div id="loginWaitContainer" style="display: none; align-items: center; gap: 0.5rem;">
+                                    <label for="loginWaitSeconds" style="font-size: 0.875rem;">Wait time:</label>
+                                    <input 
+                                        type="number" 
+                                        id="loginWaitSeconds" 
+                                        class="form-input" 
+                                        value="120"
+                                        min="30"
+                                        max="300"
+                                        style="width: 80px;"
+                                    >
+                                    <span style="font-size: 0.875rem;">seconds</span>
+                                </div>
+                            </div>
+                            <small class="form-hint" style="margin-top: 0.5rem; display: block;">
+                                Opens a visible browser for manual login (useful for CAPTCHA, 2FA, or SSO)
+                            </small>
+                        </div>
+                    </div>
+                </section>
 
                 <!-- Scan Options -->
                 <section class="form-section">
@@ -231,6 +341,7 @@
                     </div>
 
                     <div class="options-grid">
+                        <!-- Broken Access Control (Main) -->
                         <label class="option-card">
                             <input type="checkbox" id="checkBrokenAccess" class="option-input" checked>
                             <div class="option-content">
@@ -239,11 +350,12 @@
                                 </svg>
                                 <div>
                                     <div class="option-title">Broken Access Control</div>
-                                    <div class="option-desc">Test for unauthorized access</div>
+                                    <div class="option-desc">Detect unauthorized access to protected pages</div>
                                 </div>
                             </div>
                         </label>
 
+                        <!-- Vertical Privilege Escalation -->
                         <label class="option-card">
                             <input type="checkbox" id="checkPrivEscalation" class="option-input" checked>
                             <div class="option-content">
@@ -253,35 +365,54 @@
                                 </svg>
                                 <div>
                                     <div class="option-title">Privilege Escalation</div>
-                                    <div class="option-desc">Detect role elevation issues</div>
+                                    <div class="option-desc">Identify access to higher-privilege pages by lower roles</div>
                                 </div>
                             </div>
                         </label>
 
+                        <!-- Forced Browsing -->
                         <label class="option-card">
-                            <input type="checkbox" id="checkSession" class="option-input" checked>
+                            <input type="checkbox" id="checkForcedBrowsing" class="option-input" checked>
                             <div class="option-content">
                                 <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <circle cx="12" cy="12" r="10"></circle>
-                                    <path d="M12 2v20M2 12h20"></path>
+                                    <path d="M3 3h18v18H3z"></path>
+                                    <path d="M9 9h6v6H9z"></path>
                                 </svg>
                                 <div>
-                                    <div class="option-title">Session Management</div>
-                                    <div class="option-desc">Check session security</div>
+                                    <div class="option-title">Forced Browsing</div>
+                                    <div class="option-desc">Test direct access to restricted URLs</div>
                                 </div>
                             </div>
                         </label>
 
+                        <!-- Authentication Bypass -->
                         <label class="option-card">
-                            <input type="checkbox" id="captureScreenshots" class="option-input">
+                            <input type="checkbox" id="checkAuthBypass" class="option-input" checked>
                             <div class="option-content">
                                 <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                                    <circle cx="12" cy="13" r="4"></circle>
+                                    <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0"></path>
                                 </svg>
                                 <div>
-                                    <div class="option-title">Capture Screenshots</div>
-                                    <div class="option-desc">Save visual evidence</div>
+                                    <div class="option-title">Authentication Bypass</div>
+                                    <div class="option-desc">Check access without valid login</div>
+                                </div>
+                            </div>
+                        </label>
+
+                        <!-- Follow Redirects -->
+                        <label class="option-card">
+                            <input type="checkbox" id="followRedirects" class="option-input" checked>
+                            <div class="option-content">
+                                <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="17 1 21 5 17 9"></polyline>
+                                    <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                                    <polyline points="7 23 3 19 7 15"></polyline>
+                                    <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                                </svg>
+                                <div>
+                                    <div class="option-title">Follow Redirects</div>
+                                    <div class="option-desc">Handle login and access control redirects</div>
                                 </div>
                             </div>
                         </label>
@@ -289,17 +420,15 @@
                 </section>
 
                 <!-- Form Actions -->
-
-                <!-- Form Actions -->
                 <div class="form-actions">
-                    <button type="button" class="btn-secondary" onclick="saveDraft()">
+                    <!-- <button type="button" class="btn-secondary" onclick="saveDraft()">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                             <polyline points="17 21 17 13 7 13 7 21"></polyline>
                             <polyline points="7 3 7 8 15 8"></polyline>
                         </svg>
                         Save as Template
-                    </button>
+                    </button> -->
                     <div class="action-group">
                         <!-- <button type="button" class="btn-outline" onclick="window.location.href='/dashboard'">Cancel</button> -->
                         <button type="submit" class="btn-primary" id="startScanBtn">
@@ -319,9 +448,82 @@
         </div>
     </div>
 
+    <!-- Progress Modal -->
+    <div id="progressModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; padding: 30px; max-width: 600px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+            <h2 style="margin: 0 0 20px 0; color: #333;">Scan Progress</h2>
+            
+            <div style="margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span id="progressStatus" style="font-weight: 600; color: #6366f1;">Initializing...</span>
+                    <span id="progressPercent" style="font-weight: 600; color: #6366f1;">0%</span>
+                </div>
+                <div style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+                    <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); transition: width 0.3s ease;"></div>
+                </div>
+            </div>
+            
+            <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;" id="progressActivity">Starting scan...</p>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                    <div>
+                        <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">URLs Discovered</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #6366f1;" id="urlsDiscovered">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">URLs Tested</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #10b981;" id="urlsTested">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">Violations Found</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #ef4444;" id="violationsFound">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">Current URL</div>
+                        <div style="font-size: 11px; font-weight: 600; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="currentUrl">-</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="errorContainer" style="display: none; background: #fef2f2; border: 1px solid #fecaca; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                <div style="color: #991b1b; font-weight: 600; margin-bottom: 5px;">⚠️ Errors Detected</div>
+                <div id="errorList" style="font-size: 13px; color: #7f1d1d;"></div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button onclick="closeProgressModal()" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    Close
+                </button>
+                <button id="viewResultsBtn" onclick="viewScanResults()" style="display: none; padding: 10px 20px; background: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    View Results
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let authProfileCount = 1;
+
+        // Toggle role selection
+        function toggleRole(element, role) {
+            const checkbox = element.querySelector('.role-checkbox');
+            checkbox.checked = !checkbox.checked;
+            
+            if (checkbox.checked) {
+                element.classList.add('active');
+            } else {
+                element.classList.remove('active');
+            }
+            
+            // Show/hide credentials
+            if (role === 'admin') {
+                document.getElementById('adminCredentials').style.display = checkbox.checked ? 'block' : 'none';
+            } else if (role === 'user') {
+                document.getElementById('userCredentials').style.display = checkbox.checked ? 'block' : 'none';
+            }
+        }
 
         // Add new role
         function addRole() {
@@ -522,93 +724,127 @@
             });
         });
 
-        // Save as template
-        function saveDraft() {
-            alert('Template saved successfully!');
+        let progressInterval = null;
+        let currentScanId = null;
+
+        // Show progress modal
+        function showProgressModal(scanId) {
+            currentScanId = scanId;
+            document.getElementById('progressModal').style.display = 'flex';
+            
+            // Start polling for progress
+            progressInterval = setInterval(() => {
+                fetchScanProgress(scanId);
+            }, 2000); // Poll every 2 seconds
+            
+            // Fetch immediately
+            fetchScanProgress(scanId);
         }
 
-        // Form submission
-        document.getElementById('scanForm').addEventListener('submit', function(e) {
+        // Fetch scan progress
+        function fetchScanProgress(scanId) {
+            fetch(`/api/scans/${scanId}/progress`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.progress) {
+                        const p = data.progress;
+                        
+                        // Update UI
+                        document.getElementById('progressStatus').textContent = p.status || 'Running';
+                        document.getElementById('progressPercent').textContent = (p.progress_percent || 0) + '%';
+                        document.getElementById('progressBar').style.width = (p.progress_percent || 0) + '%';
+                        document.getElementById('progressActivity').textContent = p.current_activity || 'Processing...';
+                        document.getElementById('urlsDiscovered').textContent = p.urls_discovered || 0;
+                        document.getElementById('urlsTested').textContent = p.urls_tested || 0;
+                        document.getElementById('violationsFound').textContent = p.violations_found || 0;
+                        document.getElementById('currentUrl').textContent = p.current_url || '-';
+                        
+                        // Handle errors
+                        if (p.errors && p.errors.length > 0) {
+                            const errorContainer = document.getElementById('errorContainer');
+                            const errorList = document.getElementById('errorList');
+                            errorContainer.style.display = 'block';
+                            errorList.innerHTML = p.errors.map(e => e.message).join('<br>');
+                        }
+                        
+                        // Check if completed or failed
+                        if (p.status === 'Completed' || p.status === 'Failed') {
+                            clearInterval(progressInterval);
+                            document.getElementById('viewResultsBtn').style.display = 'block';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching progress:', error);
+                });
+        }
+
+        // Close progress modal
+        function closeProgressModal() {
+            document.getElementById('progressModal').style.display = 'none';
+            if (progressInterval) {
+                clearInterval(progressInterval);
+            }
+            window.location.href = '/dashboard';
+        }
+
+        // View scan results
+        function viewScanResults() {
+            window.location.href = `/report/${currentScanId}`;
+        }
+
+        // Manual login toggle handler
+        document.getElementById('manualLogin')?.addEventListener('change', function() {
+            const waitContainer = document.getElementById('loginWaitContainer');
+            if (waitContainer) {
+                waitContainer.style.display = this.checked ? 'flex' : 'none';
+            }
+        });
+
+        // Form submission - Updated to match new API format
+        document.getElementById('quickScanForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
-            // Collect all authentication profiles
-            const authProfiles = [];
-            const profileCards = document.querySelectorAll('.auth-profile-card');
-            
-            profileCards.forEach((card, index) => {
-                const profileId = index + 1;
-                const profileName = document.getElementById(`profileName${profileId}`)?.value;
-                const targetWebsite = document.getElementById(`targetWebsite${profileId}`)?.value;
-                const loginURL = document.getElementById(`loginURL${profileId}`)?.value;
-                const username = document.getElementById(`username${profileId}`)?.value;
-                const password = document.getElementById(`password${profileId}`)?.value;
-                
-                // Only add profile if required fields are filled
-                if (profileName && targetWebsite && loginURL && username && password) {
-                    const userRoleSelect = document.getElementById(`userRole${profileId}`);
-                    let userRole = userRoleSelect?.value;
-                    
-                    if (userRole === 'custom') {
-                        userRole = document.getElementById(`customRole${profileId}`)?.value || 'custom';
-                    }
-                    
-                    authProfiles.push({
-                        profile_name: profileName,
-                        target_website: targetWebsite,
-                        login_url: loginURL,
-                        auth_method: document.getElementById(`authMethod${profileId}`)?.value || 'form',
-                        username: username,
-                        password: password,
-                        user_role: userRole
-                    });
-                }
-            });
-
-            // Get form values
+            // Get form values matching the new API format
             const formData = {
                 app_name: document.getElementById('appName').value,
-                baseURL: document.getElementById('baseURL').value,
-                maxDepth: parseInt(document.getElementById('maxDepth').value),
-                crawl_delay: parseInt(document.getElementById('crawlDelay').value),
-                timeout: parseInt(document.getElementById('timeout').value),
-                max_pages: parseInt(document.getElementById('maxPages').value),
-                auth_profiles: authProfiles, // Now an array of profiles
-                roles: Array.from(document.querySelectorAll('.role-input'))
-                    .map(input => input.value)
-                    .filter(value => value.trim() !== ''),
+                target_url: document.getElementById('targetUrl').value,
+                max_depth: parseInt(document.getElementById('maxDepth').value) || 3,
+                max_pages: parseInt(document.getElementById('maxPages').value) || 100,
+                crawl_delay: parseInt(document.getElementById('crawlDelay').value) || 1000,
+                timeout: parseInt(document.getElementById('timeout').value) || 30,
+                manual_login: document.getElementById('manualLogin')?.checked || false,
+                login_wait_seconds: parseInt(document.getElementById('loginWaitSeconds')?.value) || 120,
+                admin_credentials: {
+                    username: document.getElementById('adminUsername')?.value || '',
+                    password: document.getElementById('adminPassword')?.value || '',
+                    login_url: document.getElementById('adminLoginUrl')?.value || ''
+                },
+                user_credentials: {
+                    username: document.getElementById('userUsername')?.value || '',
+                    password: document.getElementById('userPassword')?.value || '',
+                    login_url: document.getElementById('userLoginUrl')?.value || ''
+                },
                 options: {
-                    check_broken_access_control: document.getElementById('checkBrokenAccessControl').checked,
-                    check_privilege_escalation: document.getElementById('checkPrivilegeEscalation').checked,
-                    check_session_management: document.getElementById('checkSessionManagement').checked,
-                    follow_redirects: document.getElementById('followRedirects').checked,
-                    check_cors: document.getElementById('checkCORS').checked,
-                    capture_screenshots: document.getElementById('captureScreenshots').checked
+                    check_broken_access: document.getElementById('checkBrokenAccess')?.checked || false,
+                    check_priv_escalation: document.getElementById('checkPrivEscalation')?.checked || false,
+                    check_forced_browsing: document.getElementById('checkForcedBrowsing')?.checked || false,
+                    check_auth_bypass: document.getElementById('checkAuthBypass')?.checked || false,
+                    check_session: document.getElementById('checkSession')?.checked || false,
+                    follow_redirects: document.getElementById('followRedirects')?.checked || false,
+                    check_cors: document.getElementById('checkCORS')?.checked || false
                 }
             };
 
             // Validation
-            if (!formData.baseURL) {
-                alert('Please enter a base URL');
+            if (!formData.app_name) {
+                toastr.error('Please enter an application name', 'Validation Error');
                 return;
             }
 
-            if (formData.roles.length === 0) {
-                alert('Please add at least one role');
+            if (!formData.target_url) {
+                toastr.error('Please enter a target URL', 'Validation Error');
                 return;
-            }
-
-            // Optional: Validate auth profiles if any are provided
-            if (authProfiles.length > 0) {
-                // Check if any auth profile has incomplete required fields
-                const incompleteProfiles = authProfiles.filter(profile => 
-                    !profile.profile_name || !profile.target_website || !profile.login_url || 
-                    !profile.username || !profile.password
-                );
-                
-                if (incompleteProfiles.length > 0) {
-                    alert('Please complete all required fields in your authentication profiles, or remove incomplete profiles.');
-                    return;
-                }
             }
 
             // Show loading state
@@ -622,8 +858,8 @@
             btnIcon.style.display = 'none';
             btnLoader.style.display = 'inline-flex';
 
-            // Send to Flask backend - Updated URL
-            fetch('/api/scans/start', {
+            // Send to Flask backend
+            fetch('/api/quick-scan/start', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -633,17 +869,25 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Scan started successfully! Scan ID: ' + data.scan_id);
-                    window.location.href = '/dashboard';  // Updated redirect
+                    // Show progress modal instead of redirecting
+                    showProgressModal(data.scan_id);
+                    
+                    // Reset button
+                    submitBtn.disabled = false;
+                    btnText.textContent = 'Start Scan';
+                    btnIcon.style.display = 'inline';
+                    btnLoader.style.display = 'none';
                 } else {
-                    alert('Error: ' + data.message);
+                    toastr.error(data.message || 'Failed to start scan', 'Scan Error');
+                    submitBtn.disabled = false;
+                    btnText.textContent = 'Start Scan';
+                    btnIcon.style.display = 'inline';
+                    btnLoader.style.display = 'none';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred while starting the scan.');
-            })
-            .finally(() => {
+                toastr.error('An error occurred while starting the scan.', 'Connection Error');
                 submitBtn.disabled = false;
                 btnText.textContent = 'Start Scan';
                 btnIcon.style.display = 'inline';

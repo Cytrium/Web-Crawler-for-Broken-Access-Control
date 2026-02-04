@@ -11,8 +11,11 @@ class SystemUser(db.Model):
     user_id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(150), nullable=False)
+    password_hash = db.Column(db.String(256), nullable=True)  # Nullable for OAuth users
     role = db.Column(db.String(50), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    oauth_provider = db.Column(db.String(20), nullable=True)  # 'google' or 'github'
+    oauth_id = db.Column(db.String(100), nullable=True)  # Provider's user ID
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -91,6 +94,9 @@ class URL(db.Model):
     scan_id = db.Column(db.Integer, db.ForeignKey('scan.scan_id'), nullable=False)
     url = db.Column(db.String(500), nullable=False)
     http_status = db.Column(db.String(10))
+    admin_status = db.Column(db.String(10))
+    user_status = db.Column(db.String(10))
+    guest_status = db.Column(db.String(10))
     accessible_roles = db.Column(db.String(255))
 
     # Relationships

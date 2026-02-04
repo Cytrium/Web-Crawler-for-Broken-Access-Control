@@ -1,0 +1,169 @@
+{% extends "admin/admin_base.html" %}
+
+{% block title %}Scan Management - Admin{% endblock %}
+{% block page_title %}Scan Management{% endblock %}
+{% block page_subtitle %}View and manage all scans across users{% endblock %}
+
+{% block header_actions %}
+<div class="header-filters">
+    <form method="GET" action="{{ url_for('admin.scans') }}" class="filter-form">
+        <div class="search-box">
+            <input type="text" name="search" placeholder="Search by URL or user..." value="{{ search }}" class="search-input">
+        </div>
+        <select name="status" class="filter-select" onchange="this.form.submit()">
+            <option value="">All Statuses</option>
+            <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
+            <option value="running" {% if status_filter == 'running' %}selected{% endif %}>Running</option>
+            <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+            <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+        </select>
+        <button type="submit" class="search-btn">Search</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-table-container">
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Target URL</th>
+                <th>User</th>
+                <th>Status</th>
+                <th>Violations</th>
+                <th>Depth</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if scans.items %}
+                {% for scan in scans.items %}
+                <tr data-scan-id="{{ scan.scan_id }}">
+                    <td>#{{ scan.scan_id }}</td>
+                    <td class="url-cell" title="{{ scan.baseURL }}">
+                        {{ scan.baseURL[:40] }}{% if scan.baseURL|length > 40 %}...{% endif %}
+                    </td>
+                    <td>
+                        <span class="user-tag">{{ scan.user.username if scan.user else 'Unknown' }}</span>
+                    </td>
+                    <td>
+                        <span class="status-badge {{ scan.status|lower if scan.status else 'pending' }}">
+                            {{ scan.status or 'Pending' }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="violation-count {% if scan.vulnerable_count > 10 %}high{% elif scan.vulnerable_count > 5 %}medium{% else %}low{% endif %}">
+                            {{ scan.vulnerable_count or 0 }}
+                        </span>
+                    </td>
+                    <td>{{ scan.maxDepth or 3 }}</td>
+                    <td>{{ scan.created_at.strftime('%Y-%m-%d %H:%M') if scan.created_at else 'N/A' }}</td>
+                    <td class="actions-cell">
+                        <a href="{{ url_for('main.report', scan_id=scan.scan_id) }}" class="action-btn view" title="View Report">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                        </a>
+                        <button class="action-btn delete" data-scan-id="{{ scan.scan_id }}" title="Delete">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="8" class="empty-state">
+                        <div class="empty-content">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                            <p>No scans found{% if search %} for "{{ search }}"{% endif %}{% if status_filter %} with status "{{ status_filter }}"{% endif %}</p>
+                        </div>
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if scans.pages > 1 %}
+<div class="pagination">
+    {% if scans.has_prev %}
+        <a href="{{ url_for('admin.scans', page=scans.prev_num, search=search, status=status_filter) }}" class="page-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+        </a>
+    {% endif %}
+    
+    <span class="page-info">Page {{ scans.page }} of {{ scans.pages }}</span>
+    
+    {% if scans.has_next %}
+        <a href="{{ url_for('admin.scans', page=scans.next_num, search=search, status=status_filter) }}" class="page-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+        </a>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Delete Modal -->
+<div id="deleteModal" class="modal">
+    <div class="modal-content">
+        <h3>Confirm Delete</h3>
+        <p>Are you sure you want to delete this scan? This will also delete all associated URLs and violations.</p>
+        <div class="modal-actions">
+            <button class="btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+            <button class="btn-danger" id="confirmDeleteBtn">Delete</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let deleteScanId = null;
+    
+    // Delete Scan
+    document.querySelectorAll('.action-btn.delete').forEach(btn => {
+        btn.addEventListener('click', function() {
+            deleteScanId = this.dataset.scanId;
+            document.getElementById('deleteModal').classList.add('show');
+        });
+    });
+    
+    function closeDeleteModal() {
+        document.getElementById('deleteModal').classList.remove('show');
+        deleteScanId = null;
+    }
+    
+    document.getElementById('confirmDeleteBtn').addEventListener('click', async function() {
+        if (!deleteScanId) return;
+        try {
+            const response = await fetch(`/admin/scans/${deleteScanId}/delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+            if (data.success) {
+                toastr.success(data.message);
+                closeDeleteModal();
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                toastr.error(data.message);
+            }
+        } catch (err) {
+            toastr.error('An error occurred');
+        }
+    });
+</script>
+{% endblock %}

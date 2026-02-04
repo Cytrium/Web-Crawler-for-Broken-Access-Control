@@ -1,0 +1,52 @@
+{% extends "admin/admin_base.html" %}
+
+{% block title %}Edit User - Admin{% endblock %}
+{% block page_title %}Edit User{% endblock %}
+{% block page_subtitle %}Update user details for {{ user.username }}{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <form method="POST" action="{{ url_for('admin.edit_user', user_id=user.user_id) }}" class="admin-form">
+        <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" value="{{ user.username }}" required class="form-input">
+        </div>
+        
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" value="{{ user.email }}" required class="form-input">
+        </div>
+        
+        <div class="form-group">
+            <label for="role">Role</label>
+            <input type="text" id="role" name="role" value="{{ user.role }}" required class="form-input">
+        </div>
+        
+        <div class="form-info">
+            <div class="info-item">
+                <span class="info-label">User ID:</span>
+                <span class="info-value">#{{ user.user_id }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Admin Status:</span>
+                <span class="info-value">
+                    {% if user.is_admin %}
+                        <span class="status-badge admin">Admin</span>
+                    {% else %}
+                        <span class="status-badge user">User</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">Created:</span>
+                <span class="info-value">{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else 'N/A' }}</span>
+            </div>
+        </div>
+        
+        <div class="form-actions">
+            <a href="{{ url_for('admin.users') }}" class="btn-secondary">Cancel</a>
+            <button type="submit" class="btn-primary">Save Changes</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -260,6 +260,14 @@
                 </svg>
                 <span>Settings</span>
             </a>
+            {% if is_admin %}
+            <a href="{{ url_for('admin.dashboard') }}" class="nav-item admin-link">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+                <span>Admin Panel</span>
+            </a>
+            {% endif %}
         </nav>
 
         <div class="sidebar-footer">
@@ -283,18 +291,7 @@
                 <p class="page-subtitle">View and manage all your security scans</p>
             </div>
             <div class="header-actions">
-                <button class="btn-secondary" onclick="location.reload()" title="Refresh">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="23 4 23 10 17 10"></polyline>
-                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                    </svg>
-                </button>
-                <button class="btn-secondary">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                    </svg>
-                </button>
+                <button class="btn-secondary" onclick="location.reload()" title="Refresh">Refresh</button>
                 <div class="user-profile">
                     <span class="user-name">{{ username }}</span>
                     <div class="user-avatar">{{ username[0].upper() if username else 'U' }}</div>
@@ -393,12 +390,6 @@
                 <option value="Failed">Failed</option>
             </select>
 
-            <select id="page-size" class="filter-select">
-                <option value="10">10 per page</option>
-                <option value="25" selected>25 per page</option>
-                <option value="50">50 per page</option>
-                <option value="100">100 per page</option>
-            </select>
         </div>
 
         <!-- Scan History Section -->
@@ -447,7 +438,7 @@
                         <tr data-scan-id="{{ scan.scan_id }}"
                             data-app-name="{{ scan.application.name if scan.application else 'Unknown' }}"
                             data-url="{{ scan.baseURL if scan.baseURL else 'N/A' }}"
-                            data-date="{{ scan.created_at.strftime('%Y-%m-%d %H:%M') if scan.created_at else '' }}"
+                            data-date="{{ scan.created_at.isoformat() ~ 'Z' if scan.created_at else '' }}"
                             data-violations="{{ scan.vulnerable_count or 0 }}"
                             data-status="{{ scan.status or 'Unknown' }}">
                             <td class="checkbox-cell">
@@ -465,7 +456,9 @@
                                 </span>
                             </td>
                             <td>
-                                {{ scan.created_at.strftime('%Y-%m-%d %H:%M') if scan.created_at else 'N/A' }}
+                                <span class="scan-date" data-utc="{{ scan.created_at.isoformat() ~ 'Z' if scan.created_at else '' }}">
+                                    {{ scan.created_at.strftime('%Y-%m-%d %H:%M') if scan.created_at else 'N/A' }}
+                                </span>
                             </td>
                             <td>
                                 {% if scan.vulnerable_count %}
@@ -517,7 +510,7 @@
             <!-- Pagination Controls -->
             <div class="pagination-controls">
                 <div class="pagination-info" id="pagination-info">
-                    Showing 1-{{ [scans|length, 25]|min }} of {{ scans|length }}
+                    Showing 1-{{ [scans|length, 10]|min }} of {{ scans|length }}
                 </div>
                 <div class="pagination-buttons">
                     <button class="page-btn" id="first-page" onclick="goToPage('first')">First</button>
@@ -569,9 +562,7 @@
             </svg>
             Delete Selected
         </button>
-        <button class="bulk-btn" onclick="clearSelection()">
-            Clear Selection
-        </button>
+        
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -580,10 +571,35 @@
         let allScans = [];
         let filteredScans = [];
         let currentPage = 1;
-        let pageSize = 25;
+        const pageSize = 10;
         let sortColumn = 'date';
         let sortDirection = 'desc';
-        
+
+        function formatMalaysiaTime(isoString) {
+            if (!isoString) return 'N/A';
+            const date = new Date(isoString);
+            if (Number.isNaN(date.getTime())) return 'N/A';
+            return new Intl.DateTimeFormat('en-MY', {
+                timeZone: 'Asia/Kuala_Lumpur',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            }).format(date).replace(',', '');
+        }
+
+        function convertScanDates() {
+            document.querySelectorAll('.scan-date').forEach(el => {
+                const iso = el.dataset.utc || '';
+                const formatted = formatMalaysiaTime(iso);
+                if (formatted !== 'N/A') {
+                    el.textContent = formatted;
+                }
+            });
+        }
+
         // Initialize data from server
         function initializeScans() {
             const rows = document.querySelectorAll('#scans-tbody tr');
@@ -667,12 +683,6 @@
         }
         
         // Pagination
-        document.getElementById('page-size')?.addEventListener('change', (e) => {
-            pageSize = parseInt(e.target.value);
-            currentPage = 1;
-            updateTable();
-        });
-        
         function goToPage(action) {
             const totalPages = Math.ceil(filteredScans.length / pageSize);
             
@@ -840,6 +850,7 @@
         
         // Initialize on page load
         if (document.getElementById('scans-tbody')) {
+            convertScanDates();
             initializeScans();
         }
         

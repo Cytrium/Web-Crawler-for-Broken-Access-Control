@@ -1,0 +1,27 @@
+# Environment variables
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Flask / Python temp
+.pycache_tmp/
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+
+# Local notes / dumps
+Notes Dump/
+
+# Alembic cache only (keep versions/)
+migrations/__pycache__/

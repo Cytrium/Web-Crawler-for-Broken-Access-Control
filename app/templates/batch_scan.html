@@ -47,7 +47,7 @@
                 </svg>
                 <span>Scan History</span>
             </a>
-            <a href="#" class="nav-item">
+            <a href="/settings" class="nav-item">
                 <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
                     <circle cx="12" cy="12" r="3"></circle>
@@ -91,7 +91,116 @@
         <div class="scan-form-container">
             <form id="scanForm" class="scan-form">
 
-                <!-- Authentication -->
+                <!-- File Upload Section -->
+                <section class="form-section">
+                    <div class="section-header">
+                        <div class="section-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="section-title">Import Targets from File</h2>
+                            <p class="section-desc">Upload a .txt or .csv file with target URLs and optional credentials</p>
+                        </div>
+                    </div>
+
+                    <!-- Drag and Drop Zone -->
+                    <div id="dropZone" class="drop-zone" ondrop="handleFileDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                        <div class="drop-zone-content">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p class="drop-zone-text">Drag and drop your file here</p>
+                            <p class="drop-zone-hint">or</p>
+                            <label for="fileInput" class="btn-file-browse">
+                                Browse Files
+                                <input type="file" id="fileInput" accept=".txt,.csv" onchange="handleFileSelect(event)" style="display: none;">
+                            </label>
+                            <p class="drop-zone-formats">Supported formats: .txt, .csv (max 5MB)</p>
+                        </div>
+                    </div>
+
+                    <!-- File Info Display -->
+                    <div id="fileInfo" class="file-info" style="display: none;">
+                        <div class="file-info-header">
+                            <div class="file-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                </svg>
+                            </div>
+                            <div class="file-details">
+                                <span id="fileName" class="file-name">filename.csv</span>
+                                <span id="fileSize" class="file-size">0 KB</span>
+                            </div>
+                            <button type="button" class="btn-remove-file" onclick="removeFile()">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="file-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Entries Found:</span>
+                                <span id="entryCount" class="stat-value">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Valid URLs:</span>
+                                <span id="validUrlCount" class="stat-value">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">With Credentials:</span>
+                                <span id="withCredsCount" class="stat-value">0</span>
+                            </div>
+                        </div>
+                        <div id="parseErrors" class="parse-errors" style="display: none;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="8" x2="12" y2="12"></line>
+                                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                            </svg>
+                            <span id="parseErrorText">Some entries could not be parsed</span>
+                        </div>
+                    </div>
+
+                    <!-- Format Help -->
+                    <div class="format-help">
+                        <div class="format-help-header" onclick="toggleFormatHelp()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                            <span>File Format Examples</span>
+                            <svg id="formatHelpChevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition: transform 0.2s;">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </div>
+                        <div id="formatHelpContent" class="format-help-content" style="display: none;">
+                            <div class="format-example">
+                                <h5>TXT Format:</h5>
+                                <code>url,username,password,role
+http://example.com,admin,admin123,admin
+http://example.com,user,pass123,user</code>
+                            </div>
+                            <div class="format-example">
+                                <h5>CSV Format:</h5>
+                                <code>url,username,password,role
+http://example.com,admin,admin123,admin
+http://example.com,user,pass123,user</code>
+                            </div>
+                            <p class="format-note">Note: Role is optional. If omitted, credentials will be treated as 'user' role.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Authentication (Manual Entry) -->
                 <section class="form-section">
                     <div class="section-header">
                         <div class="section-icon">
@@ -101,8 +210,8 @@
                             </svg>
                         </div>
                         <div>
-                            <h2 class="section-title">Authentication Profiles</h2>
-                            <p class="section-desc">Add credentials for testing authenticated sections. Multiple profiles supported for different user roles.</p>
+                            <h2 class="section-title">Manual Authentication Profiles</h2>
+                            <p class="section-desc">Alternatively, add credentials manually. These will be combined with imported entries.</p>
                         </div>
                     </div>
 
@@ -366,6 +475,34 @@
                         </label>
 
                         <label class="option-card">
+                            <input type="checkbox" id="checkForcedBrowsing" class="option-input" checked>
+                            <div class="option-content">
+                                <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 3h18v18H3z"></path>
+                                    <path d="M9 9h6v6H9z"></path>
+                                </svg>
+                                <div>
+                                    <div class="option-title">Forced Browsing</div>
+                                    <div class="option-desc">Test direct access to restricted URLs</div>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="option-card">
+                            <input type="checkbox" id="checkAuthBypass" class="option-input" checked>
+                            <div class="option-content">
+                                <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0"></path>
+                                </svg>
+                                <div>
+                                    <div class="option-title">Authentication Bypass</div>
+                                    <div class="option-desc">Check access without valid login</div>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="option-card">
                             <input type="checkbox" id="checkSessionManagement" class="option-input" checked>
                             <div class="option-content">
                                 <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -412,19 +549,6 @@
                             </div>
                         </label>
 
-                        <label class="option-card">
-                            <input type="checkbox" id="captureScreenshots" class="option-input">
-                            <div class="option-content">
-                                <svg class="option-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                                    <circle cx="12" cy="13" r="4"></circle>
-                                </svg>
-                                <div>
-                                    <div class="option-title">Capture Screenshots</div>
-                                    <div class="option-desc">Save screenshots of vulnerable pages</div>
-                                </div>
-                            </div>
-                        </label>
                     </div>
                 </section>
 
@@ -478,14 +602,6 @@
 
                 <!-- Form Actions -->
                 <div class="form-actions">
-                    <button type="button" class="btn-secondary" onclick="saveDraft()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                            <polyline points="7 3 7 8 15 8"></polyline>
-                        </svg>
-                        Save as Template
-                    </button>
                     <div class="action-group">
                         <!-- <button type="button" class="btn-outline" onclick="window.location.href='/dashboard'">Cancel</button> -->
                         <button type="submit" class="btn-primary" id="startScanBtn">
@@ -502,6 +618,54 @@
                     </div>
                 </div>
             </form>
+        </div>
+
+    <!-- Progress Modal -->
+    <div id="progressModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; padding: 30px; max-width: 600px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+            <h2 style="margin: 0 0 20px 0; color: #333;">Batch Scan Progress</h2>
+            
+            <div style="margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span id="progressStatus" style="font-weight: 600; color: #6366f1;">Initializing...</span>
+                    <span id="progressPercent" style="font-weight: 600; color: #6366f1;">0%</span>
+                </div>
+                <div style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden;">
+                    <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); transition: width 0.3s ease;"></div>
+                </div>
+            </div>
+            
+            <div style="background: #f9fafb; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;" id="progressActivity">Starting batch scan...</p>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                    <div>
+                        <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">Total URLs Discovered</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #6366f1;" id="urlsDiscovered">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">Targets Completed</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #10b981;" id="urlsTested">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">Violations Found</div>
+                        <div style="font-size: 20px; font-weight: 700; color: #ef4444;" id="violationsFound">0</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">Status</div>
+                        <div style="font-size: 11px; font-weight: 600; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="currentUrl">-</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button onclick="closeProgressModal()" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    Close
+                </button>
+                <button id="viewResultsBtn" onclick="viewScanResults()" style="display: none; padding: 10px 20px; background: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    View Results
+                </button>
+            </div>
         </div>
     </div>
 
@@ -708,16 +872,305 @@
             });
         });
 
-        // Save as template
-        function saveDraft() {
-            alert('Template saved successfully!');
+        // Progress tracking variables
+        let progressInterval = null;
+        let currentScanIds = [];
+
+        // Show progress modal for batch scans
+        function showBatchProgressModal(scanIds) {
+            currentScanIds = scanIds;
+            document.getElementById('progressModal').style.display = 'flex';
+            
+            // Start polling for progress
+            progressInterval = setInterval(() => {
+                fetchBatchProgress(scanIds);
+            }, 3000); // Poll every 3 seconds
+            
+            // Fetch immediately
+            fetchBatchProgress(scanIds);
         }
 
-        // Form submission
+        // Fetch batch scan progress
+        function fetchBatchProgress(scanIds) {
+            // For batch scans, we check the first scan's progress as representative
+            if (scanIds.length === 0) return;
+            
+            // Check each scan's status
+            let completedCount = 0;
+            let totalViolations = 0;
+            let totalUrls = 0;
+            let currentActivity = 'Running scans...';
+            let overallStatus = 'Running';
+            
+            Promise.all(scanIds.map(scanId => 
+                fetch(`/api/scans/${scanId}/progress`).then(r => r.json())
+            )).then(results => {
+                results.forEach((data, index) => {
+                    if (data.success && data.progress) {
+                        const p = data.progress;
+                        totalViolations += p.violations_found || 0;
+                        totalUrls += p.urls_discovered || 0;
+                        
+                        if (p.status === 'Completed' || p.status === 'Failed') {
+                            completedCount++;
+                        }
+                        
+                        if (index === 0) {
+                            currentActivity = p.current_activity || 'Processing...';
+                        }
+                    }
+                });
+                
+                const progressPercent = Math.round((completedCount / scanIds.length) * 100);
+                
+                // Update UI
+                document.getElementById('progressStatus').textContent = `${completedCount}/${scanIds.length} targets completed`;
+                document.getElementById('progressPercent').textContent = progressPercent + '%';
+                document.getElementById('progressBar').style.width = progressPercent + '%';
+                document.getElementById('progressActivity').textContent = currentActivity;
+                document.getElementById('urlsDiscovered').textContent = totalUrls;
+                document.getElementById('urlsTested').textContent = completedCount;
+                document.getElementById('violationsFound').textContent = totalViolations;
+                document.getElementById('currentUrl').textContent = `Scanning ${scanIds.length} target(s)`;
+                
+                // Check if all completed
+                if (completedCount === scanIds.length) {
+                    clearInterval(progressInterval);
+                    document.getElementById('viewResultsBtn').style.display = 'block';
+                }
+            }).catch(error => {
+                console.error('Error fetching batch progress:', error);
+            });
+        }
+
+        // Close progress modal
+        function closeProgressModal() {
+            document.getElementById('progressModal').style.display = 'none';
+            if (progressInterval) {
+                clearInterval(progressInterval);
+            }
+            window.location.href = '/dashboard';
+        }
+
+        // View scan results
+        function viewScanResults() {
+            window.location.href = '/reports';
+        }
+
+        // ====================================================
+        // FILE UPLOAD HANDLING
+        // ====================================================
+        
+        // Store imported entries from file
+        let importedEntries = [];
+        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB limit
+
+        // Handle drag over
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.getElementById('dropZone').classList.add('drag-over');
+        }
+
+        // Handle drag leave
+        function handleDragLeave(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.getElementById('dropZone').classList.remove('drag-over');
+        }
+
+        // Handle file drop
+        function handleFileDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.getElementById('dropZone').classList.remove('drag-over');
+            
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        // Handle file select via browse button
+        function handleFileSelect(event) {
+            const files = event.target.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        // Process uploaded file
+        function processFile(file) {
+            // Validate file type
+            const validTypes = ['.txt', '.csv'];
+            const fileName = file.name.toLowerCase();
+            const isValidType = validTypes.some(ext => fileName.endsWith(ext));
+            
+            if (!isValidType) {
+                alert('Invalid file type. Please upload a .txt or .csv file.');
+                return;
+            }
+
+            // Validate file size
+            if (file.size > MAX_FILE_SIZE) {
+                alert('File too large. Maximum file size is 5MB.');
+                return;
+            }
+
+            // Read and parse file
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                parseFileContent(content, file.name, file.size);
+            };
+            reader.onerror = function() {
+                alert('Error reading file. Please try again.');
+            };
+            reader.readAsText(file);
+        }
+
+        // Parse file content (TXT or CSV)
+        function parseFileContent(content, fileName, fileSize) {
+            const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            
+            if (lines.length === 0) {
+                alert('File is empty. Please upload a file with scan entries.');
+                return;
+            }
+
+            importedEntries = [];
+            let parseErrors = 0;
+            let hasHeader = false;
+
+            // Check if first line is a header
+            const firstLine = lines[0].toLowerCase();
+            if (firstLine.includes('url') && (firstLine.includes('username') || firstLine.includes('password'))) {
+                hasHeader = true;
+            }
+
+            const startIndex = hasHeader ? 1 : 0;
+
+            for (let i = startIndex; i < lines.length; i++) {
+                const line = lines[i];
+                const parts = parseLine(line);
+                
+                if (parts.length >= 1 && isValidUrl(parts[0])) {
+                    importedEntries.push({
+                        url: parts[0].trim(),
+                        username: parts[1]?.trim() || '',
+                        password: parts[2]?.trim() || '',
+                        role: parts[3]?.trim()?.toLowerCase() || 'user'
+                    });
+                } else if (line.length > 0) {
+                    parseErrors++;
+                }
+            }
+
+            // Update UI
+            displayFileInfo(fileName, fileSize, importedEntries.length, parseErrors);
+        }
+
+        // Parse a single line (handles CSV with quoted values)
+        function parseLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current);
+            
+            return result;
+        }
+
+        // Validate URL format
+        function isValidUrl(string) {
+            try {
+                const url = new URL(string);
+                return url.protocol === 'http:' || url.protocol === 'https:';
+            } catch (_) {
+                return false;
+            }
+        }
+
+        // Display file info in UI
+        function displayFileInfo(fileName, fileSize, entryCount, parseErrors) {
+            const dropZone = document.getElementById('dropZone');
+            const fileInfo = document.getElementById('fileInfo');
+            
+            // Hide drop zone, show file info
+            dropZone.style.display = 'none';
+            fileInfo.style.display = 'block';
+
+            // Update file details
+            document.getElementById('fileName').textContent = fileName;
+            document.getElementById('fileSize').textContent = formatFileSize(fileSize);
+            document.getElementById('entryCount').textContent = entryCount;
+            
+            // Count valid URLs and entries with credentials
+            const validUrls = importedEntries.length;
+            const withCreds = importedEntries.filter(e => e.username && e.password).length;
+            
+            document.getElementById('validUrlCount').textContent = validUrls;
+            document.getElementById('withCredsCount').textContent = withCreds;
+
+            // Show parse errors if any
+            if (parseErrors > 0) {
+                document.getElementById('parseErrors').style.display = 'flex';
+                document.getElementById('parseErrorText').textContent = 
+                    `${parseErrors} row(s) could not be parsed and were skipped`;
+            } else {
+                document.getElementById('parseErrors').style.display = 'none';
+            }
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        // Remove uploaded file
+        function removeFile() {
+            importedEntries = [];
+            document.getElementById('dropZone').style.display = 'block';
+            document.getElementById('fileInfo').style.display = 'none';
+            document.getElementById('fileInput').value = '';
+        }
+
+        // Toggle format help section
+        function toggleFormatHelp() {
+            const content = document.getElementById('formatHelpContent');
+            const chevron = document.getElementById('formatHelpChevron');
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                chevron.style.transform = 'rotate(180deg)';
+            } else {
+                content.style.display = 'none';
+                chevron.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        // ====================================================
+        // FORM SUBMISSION
+        // ====================================================
+        
         document.getElementById('scanForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
-            // Collect all authentication profiles
+            // Collect manual authentication profiles
             const authProfiles = [];
             const profileCards = document.querySelectorAll('.auth-profile-card');
             
@@ -729,73 +1182,66 @@
                 const username = document.getElementById(`username${profileId}`)?.value;
                 const password = document.getElementById(`password${profileId}`)?.value;
                 
-                // Only add profile if required fields are filled
-                if (profileName && targetWebsite && loginURL && username && password) {
+                // Only add profile if target website is provided
+                if (targetWebsite) {
                     const userRoleSelect = document.getElementById(`userRole${profileId}`);
-                    let userRole = userRoleSelect?.value;
+                    let userRole = userRoleSelect?.value || 'user';
                     
                     if (userRole === 'custom') {
                         userRole = document.getElementById(`customRole${profileId}`)?.value || 'custom';
                     }
                     
                     authProfiles.push({
-                        profile_name: profileName,
+                        profile_name: profileName || `Target ${profileId}`,
                         target_website: targetWebsite,
-                        login_url: loginURL,
+                        login_url: loginURL || '',
                         auth_method: document.getElementById(`authMethod${profileId}`)?.value || 'form',
-                        username: username,
-                        password: password,
+                        username: username || '',
+                        password: password || '',
                         user_role: userRole
                     });
                 }
             });
 
-            // Get form values
+            // Add imported entries from file upload
+            importedEntries.forEach((entry, index) => {
+                authProfiles.push({
+                    profile_name: `Imported ${index + 1}`,
+                    target_website: entry.url,
+                    login_url: entry.url + '/login',  // Default login URL
+                    auth_method: 'form',
+                    username: entry.username,
+                    password: entry.password,
+                    user_role: entry.role || 'user'
+                });
+            });
+
+            // Get form values for batch scan
             const formData = {
-                app_name: document.getElementById('appName').value,
-                baseURL: document.getElementById('baseURL').value,
-                maxDepth: parseInt(document.getElementById('maxDepth').value),
-                crawl_delay: parseInt(document.getElementById('crawlDelay').value),
-                timeout: parseInt(document.getElementById('timeout').value),
-                max_pages: parseInt(document.getElementById('maxPages').value),
-                auth_profiles: authProfiles, // Now an array of profiles
-                roles: Array.from(document.querySelectorAll('.role-input'))
-                    .map(input => input.value)
-                    .filter(value => value.trim() !== ''),
-                options: {
-                    check_broken_access_control: document.getElementById('checkBrokenAccessControl').checked,
-                    check_privilege_escalation: document.getElementById('checkPrivilegeEscalation').checked,
-                    check_session_management: document.getElementById('checkSessionManagement').checked,
-                    follow_redirects: document.getElementById('followRedirects').checked,
-                    check_cors: document.getElementById('checkCORS').checked,
-                    capture_screenshots: document.getElementById('captureScreenshots').checked
+                auth_profiles: authProfiles,
+                max_depth: parseInt(document.getElementById('maxDepth').value) || 3,
+                max_pages: parseInt(document.getElementById('maxPages')?.value) || 100,
+                execution_mode: document.getElementById('executionMode')?.value || 'sequential',
+                delay_between_scans: parseInt(document.getElementById('delayBetweenScans')?.value) || 5,
+                    options: {
+                    check_broken_access_control: document.getElementById('checkBrokenAccessControl')?.checked ?? true,
+                    check_privilege_escalation: document.getElementById('checkPrivilegeEscalation')?.checked ?? true,
+                    check_forced_browsing: document.getElementById('checkForcedBrowsing')?.checked ?? true,
+                    check_auth_bypass: document.getElementById('checkAuthBypass')?.checked ?? true,
+                    check_session_management: document.getElementById('checkSessionManagement')?.checked ?? true,
+                    capture_screenshots: document.getElementById('captureScreenshots')?.checked ?? false
                 }
             };
 
-            // Validation
-            if (!formData.baseURL) {
-                alert('Please enter a base URL');
+            // Validation - require at least one target
+            if (authProfiles.length === 0) {
+                alert('Please add at least one target website (via file upload or manual entry)');
                 return;
             }
 
-            if (formData.roles.length === 0) {
-                alert('Please add at least one role');
-                return;
-            }
-
-            // Optional: Validate auth profiles if any are provided
-            if (authProfiles.length > 0) {
-                // Check if any auth profile has incomplete required fields
-                const incompleteProfiles = authProfiles.filter(profile => 
-                    !profile.profile_name || !profile.target_website || !profile.login_url || 
-                    !profile.username || !profile.password
-                );
-                
-                if (incompleteProfiles.length > 0) {
-                    alert('Please complete all required fields in your authentication profiles, or remove incomplete profiles.');
-                    return;
-                }
-            }
+            console.log('Submitting batch scan with', authProfiles.length, 'profiles');
+            console.log('Imported entries:', importedEntries.length);
+            console.log('Manual entries:', authProfiles.length - importedEntries.length);
 
             // Show loading state
             const submitBtn = document.getElementById('startScanBtn');
@@ -804,12 +1250,12 @@
             const btnLoader = document.getElementById('btnLoader');
 
             submitBtn.disabled = true;
-            btnText.textContent = 'Starting Scan...';
+            btnText.textContent = 'Starting Batch Scan...';
             btnIcon.style.display = 'none';
             btnLoader.style.display = 'inline-flex';
 
-            // Send to Flask backend - Updated URL
-            fetch('/api/scans/start', {
+            // Send to Flask backend
+            fetch('/api/batch-scans/start', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -819,17 +1265,25 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('Scan started successfully! Scan ID: ' + data.scan_id);
-                    window.location.href = '/dashboard';  // Updated redirect
+                    // Show progress modal for batch scans
+                    showBatchProgressModal(data.scan_ids || []);
+                    
+                    // Reset button
+                    submitBtn.disabled = false;
+                    btnText.textContent = 'Start Scan';
+                    btnIcon.style.display = 'inline';
+                    btnLoader.style.display = 'none';
                 } else {
                     alert('Error: ' + data.message);
+                    submitBtn.disabled = false;
+                    btnText.textContent = 'Start Scan';
+                    btnIcon.style.display = 'inline';
+                    btnLoader.style.display = 'none';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred while starting the scan.');
-            })
-            .finally(() => {
+                alert('An error occurred while starting the batch scan.');
                 submitBtn.disabled = false;
                 btnText.textContent = 'Start Scan';
                 btnIcon.style.display = 'inline';

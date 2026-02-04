@@ -4,6 +4,7 @@
     --bg-primary: #0f172a;
     --bg-secondary: #1e293b;
     --bg-card: #1e293b;
+    --bg-hover: #334155;
     --text-primary: #ffffff;
     --text-secondary: #94a3b8;
     --accent-blue: #3b82f6;
@@ -11,6 +12,18 @@
     --border-color: #334155;
     --input-bg: #0f172a;
     --success: #10b981;
+}
+
+/* Light Theme */
+[data-theme="light"] {
+    --bg-primary: #c6d8f1;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --bg-hover: #e2e8f0;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --border-color: #cbd5e1;
+    --input-bg: #f1f5f9;
 }
 
 * {
@@ -31,6 +44,7 @@ body {
 .login-container {
     display: flex;
     min-height: 100vh;
+    position: relative;
 }
 
 /* Left Side - Branding */
@@ -119,6 +133,49 @@ body {
 .login-form-container {
     width: 100%;
     max-width: 450px;
+}
+
+.btn-secondary {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.3s;
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.btn-secondary:hover {
+    background-color: var(--bg-hover);
+}
+
+.back-home-btn {
+    position: absolute;
+    top: 1.5rem;
+    left: 1.5rem;
+    z-index: 2;
+}
+
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+    transition: color 0.3s;
+}
+
+.back-link:hover {
+    color: var(--text-primary);
 }
 
 .form-header {
@@ -348,6 +405,12 @@ body {
 .social-btn:hover {
     background-color: var(--bg-secondary);
     border-color: var(--accent-blue);
+}
+
+.social-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 /* Responsive Design */

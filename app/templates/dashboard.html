@@ -5,8 +5,7 @@
     <title>Dashboard - Perimeter</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard-styles.css') }}">
-</head>
-<body>
+
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">
@@ -53,10 +52,18 @@
                 </svg>
                 <span>Settings</span>
             </a>
+            {% if is_admin %}
+            <a href="{{ url_for('admin.dashboard') }}" class="nav-item admin-link">
+                <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+                <span>Admin Panel</span>
+            </a>
+            {% endif %}
         </nav>
 
         <div class="sidebar-footer">
-            <a href="#" class="nav-item">
+            <a href="{{ url_for('main.logout') }}" class="nav-item">
                 <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                     <polyline points="16 17 21 12 16 7"></polyline>
@@ -83,8 +90,8 @@
                     </svg>
                 </button>
                 <div class="user-profile">
-                    <span class="user-name">User {nanti tukar}</span>
-                    <div class="user-avatar">AU</div>
+                    <span class="user-name">{{ username }}</span>
+                    <div class="user-avatar">{{ user_initials }}</div>
                 </div>
             </div>
         </header>
@@ -101,7 +108,7 @@
                             </svg>
                         </div>
                         <div class="stat-content">
-                            <div class="stat-value">24</div>
+                            <div class="stat-value">{{ total_scans }}</div>
                             <div class="stat-label">Total Scans</div>
                         </div>
                     </div>
@@ -116,7 +123,7 @@
                             </svg>
                         </div>
                         <div class="stat-content">
-                            <div class="stat-value">47</div>
+                            <div class="stat-value">{{ total_vulns }}</div>
                             <div class="stat-label">Vulnerabilities Found</div>
                         </div>
                     </div>
@@ -130,7 +137,7 @@
                             </svg>
                         </div>
                         <div class="stat-content">
-                            <div class="stat-value">1,248</div>
+                            <div class="stat-value">{{ total_urls }}</div>
                             <div class="stat-label">URLs Crawled</div>
                         </div>
                     </div>
@@ -146,7 +153,7 @@
                             </svg>
                         </div>
                         <div class="stat-content">
-                            <div class="stat-value">8</div>
+                            <div class="stat-value">{{ total_roles }}</div>
                             <div class="stat-label">Roles Tested</div>
                         </div>
                     </div>
@@ -157,33 +164,50 @@
             <div class="risk-card">
                 <div class="risk-header">
                     <h3 class="risk-title">Latest Scan Risk Assessment</h3>
+                    {% if risk_data.risk_level == 'critical' %}
                     <span class="risk-badge critical">Critical Issues Found</span>
+                    {% elif risk_data.risk_level == 'high' %}
+                    <span class="risk-badge high">High Priority Issues</span>
+                    {% elif risk_data.risk_level == 'medium' %}
+                    <span class="risk-badge medium">Medium Priority Issues</span>
+                    {% else %}
+                    <span class="risk-badge low">Low Risk</span>
+                    {% endif %}
                 </div>
                 <div class="risk-body">
                     <div class="risk-gauge">
                         <svg class="gauge-svg" viewBox="0 0 200 120">
-                            <path class="gauge-bg" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#334155" stroke-width="20"/>
-                            <path class="gauge-fill critical-fill" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#ef4444" stroke-width="20" stroke-dasharray="251.2 251.2" stroke-dashoffset="62.8"/>
+                            <path class="gauge-bg" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke-width="20"/>
+                            {% set dash_offset = 251.2 - (251.2 * risk_data.risk_percent / 100) %}
+                            {% if risk_data.risk_level == 'critical' %}
+                            <path class="gauge-fill critical-fill" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#ef4444" stroke-width="20" stroke-dasharray="251.2 251.2" stroke-dashoffset="{{ dash_offset }}"/>
+                            {% elif risk_data.risk_level == 'high' %}
+                            <path class="gauge-fill high-fill" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#f97316" stroke-width="20" stroke-dasharray="251.2 251.2" stroke-dashoffset="{{ dash_offset }}"/>
+                            {% elif risk_data.risk_level == 'medium' %}
+                            <path class="gauge-fill medium-fill" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#eab308" stroke-width="20" stroke-dasharray="251.2 251.2" stroke-dashoffset="{{ dash_offset }}"/>
+                            {% else %}
+                            <path class="gauge-fill low-fill" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#22c55e" stroke-width="20" stroke-dasharray="251.2 251.2" stroke-dashoffset="{{ dash_offset }}"/>
+                            {% endif %}
                         </svg>
                         <div class="gauge-center">
-                            <div class="gauge-value">75%</div>
+                            <div class="gauge-value">{{ risk_data.risk_percent }}%</div>
                             <div class="gauge-label">Risk Level</div>
                         </div>
                     </div>
                     <div class="risk-details">
                         <div class="risk-item">
                             <span class="risk-dot critical-dot"></span>
-                            <span>12 Critical BAC Issues</span>
+                            <span>{{ risk_data.critical_count }} Critical BAC Issues</span>
                         </div>
                         <div class="risk-item">
                             <span class="risk-dot high-dot"></span>
-                            <span>23 High Priority Issues</span>
+                            <span>{{ risk_data.high_count }} High Priority Issues</span>
                         </div>
                         <div class="risk-item">
                             <span class="risk-dot medium-dot"></span>
-                            <span>12 Medium Priority Issues</span>
+                            <span>{{ risk_data.medium_count }} Medium Priority Issues</span>
                         </div>
-                        <p class="risk-description">Last scan detected unauthorized access attempts across multiple endpoints. Immediate action recommended.</p>
+                        <p class="risk-description">{{ risk_data.description }}</p>
                     </div>
                 </div>
             </div>
@@ -267,21 +291,54 @@
                         </tr>
                     </thead>
                     <tbody>
+                        {% if scans %}
+                        {% for scan in scans %}
                         <tr>
-                            <td><span class="scan-id">#SC-2024-001</span></td>
-                            <td>https://example.com/app</td>
-                            <td><span class="role-badge">Admin</span><span class="role-badge">User</span></td>
-                            <td><span class="violation-count critical">12</span></td>
-                            <td><span class="status-badge completed">Completed</span></td>
-                            <td>2024-01-15 14:30</td>
+                            <td><span class="scan-id">#SC-{{ '%04d'|format(scan.scan_id) }}</span></td>
+                            <td>{{ scan.baseURL|truncate(40) }}</td>
                             <td>
-                                <button class="action-btn" title="View Report">
+                                {% if scan.application and scan.application.credentials %}
+                                    {% for cred in scan.application.credentials[:2] %}
+                                    <span class="role-badge">{{ cred.role_name|capitalize }}</span>
+                                    {% endfor %}
+                                {% else %}
+                                <span class="role-badge">Default</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set vuln_count = scan.vulnerable_count or 0 %}
+                                {% if vuln_count >= 10 %}
+                                <span class="violation-count critical">{{ vuln_count }}</span>
+                                {% elif vuln_count >= 5 %}
+                                <span class="violation-count high">{{ vuln_count }}</span>
+                                {% elif vuln_count >= 1 %}
+                                <span class="violation-count medium">{{ vuln_count }}</span>
+                                {% else %}
+                                <span class="violation-count low">{{ vuln_count }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if scan.status == 'Completed' %}
+                                <span class="status-badge completed">Completed</span>
+                                {% elif scan.status == 'Running' or scan.status == 'In Progress' %}
+                                <span class="status-badge running">Running</span>
+                                {% elif scan.status == 'Queued' %}
+                                <span class="status-badge queued">Queued</span>
+                                {% elif scan.status == 'Failed' %}
+                                <span class="status-badge failed">Failed</span>
+                                {% else %}
+                                <span class="status-badge">{{ scan.status or 'Unknown' }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ scan.created_at.strftime('%Y-%m-%d %H:%M') if scan.created_at else 'N/A' }}</td>
+                            <td>
+                                <a href="{{ url_for('main.report', scan_id=scan.scan_id) }}" class="action-btn" title="View Report">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                         <circle cx="12" cy="12" r="3"></circle>
                                     </svg>
-                                </button>
-                                <button class="action-btn" title="Download Report">
+                                </a>
+                                <button class="action-btn download-btn" title="Download Report" data-scan-id="{{ scan.scan_id }}">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                         <polyline points="7 10 12 15 17 10"></polyline>
@@ -290,75 +347,12 @@
                                 </button>
                             </td>
                         </tr>
+                        {% endfor %}
+                        {% else %}
                         <tr>
-                            <td><span class="scan-id">#SC-2024-002</span></td>
-                            <td>https://test-site.com</td>
-                            <td><span class="role-badge">User</span><span class="role-badge">Guest</span></td>
-                            <td><span class="violation-count high">8</span></td>
-                            <td><span class="status-badge completed">Completed</span></td>
-                            <td>2024-01-14 09:15</td>
-                            <td>
-                                <button class="action-btn" title="View Report">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                        <circle cx="12" cy="12" r="3"></circle>
-                                    </svg>
-                                </button>
-                                <button class="action-btn" title="Download Report">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                        <polyline points="7 10 12 15 17 10"></polyline>
-                                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                                    </svg>
-                                </button>
-                            </td>
+                            <td colspan="7" class="text-center" style="padding: 2rem; color: #94a3b8;">No scans found. Start a new scan to see results here.</td>
                         </tr>
-                        <tr>
-                            <td><span class="scan-id">#SC-2024-003</span></td>
-                            <td>https://webapp.io/dashboard</td>
-                            <td><span class="role-badge">Admin</span></td>
-                            <td><span class="violation-count medium">5</span></td>
-                            <td><span class="status-badge running">Running</span></td>
-                            <td>2024-01-15 16:45</td>
-                            <td>
-                                <button class="action-btn" title="View Report">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                        <circle cx="12" cy="12" r="3"></circle>
-                                    </svg>
-                                </button>
-                                <button class="action-btn" title="Download Report">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                        <polyline points="7 10 12 15 17 10"></polyline>
-                                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                                    </svg>
-                                </button>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td><span class="scan-id">#SC-2024-004</span></td>
-                            <td>https://secure-app.com</td>
-                            <td><span class="role-badge">User</span><span class="role-badge">Moderator</span></td>
-                            <td><span class="violation-count low">2</span></td>
-                            <td><span class="status-badge completed">Completed</span></td>
-                            <td>2024-01-13 11:20</td>
-                            <td>
-                                <button class="action-btn" title="View Report">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                        <circle cx="12" cy="12" r="3"></circle>
-                                    </svg>
-                                </button>
-                                <button class="action-btn" title="Download Report">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                        <polyline points="7 10 12 15 17 10"></polyline>
-                                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                                    </svg>
-                                </button>
-                            </td>
-                        </tr>
+                        {% endif %}
                     </tbody>
                 </table>
             </div>
@@ -367,22 +361,59 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // New Scan Button Handler
-        document.getElementById('newScanBtn').addEventListener('click', function() {
-            alert('Opening New Scan Configuration...');
-            // Here you would open a modal or navigate to scan configuration page
+        // Show login-success toast after all shared scripts (including toastr) are loaded.
+        window.addEventListener('load', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('login_success') !== 'true') {
+                return;
+            }
+
+            const username = urlParams.get('user') || 'User';
+            if (typeof toastr !== 'undefined') {
+                toastr["success"]("Welcome " + decodeURIComponent(username), "Login Successful");
+            }
+
+            // Clean up URL
+            window.history.replaceState({}, document.title, window.location.pathname);
         });
 
-        // Action Buttons
-        document.querySelectorAll('.action-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const action = this.title;
-                console.log(action + ' clicked');
-                // Handle view/download report actions
+        // Refresh Button Handler
+        document.querySelector('.section-header .btn-secondary')?.addEventListener('click', function() {
+            window.location.reload();
+        });
+
+        // Download Button Handlers
+        document.querySelectorAll('.download-btn').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const scanId = this.dataset.scanId;
+                if (!scanId) return;
+                
+                try {
+                    const response = await fetch('/api/scans/bulk-export', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ scan_ids: [parseInt(scanId)] })
+                    });
+                    
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `scan_report_${scanId}.zip`;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(url);
+                    } else {
+                        alert('Failed to download report. Please try again.');
+                    }
+                } catch (error) {
+                    console.error('Download error:', error);
+                    alert('Error downloading report.');
+                }
             });
         });
     </script>
-</body>
-</html>
 
 {% endblock %}
