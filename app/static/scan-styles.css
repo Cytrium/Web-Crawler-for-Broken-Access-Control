@@ -385,6 +385,34 @@
             color: var(--text-secondary);
         }
 
+        .manual-login-group {
+            grid-column: 1 / -1;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .manual-login-option {
+            margin-bottom: 0.75rem;
+        }
+
+        .login-wait-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .login-wait-container label,
+        .login-wait-container span {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .login-wait-container #loginWaitSeconds {
+            width: 100px;
+        }
+
         /* Form actions */
         .form-actions {
             display: flex;

@@ -422,10 +422,47 @@ body {
     color: var(--text-secondary);
 }
 
+.manual-login-group {
+    grid-column: 1 / -1;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.manual-login-option {
+    margin-bottom: 0.75rem;
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+}
+
+.login-wait-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.login-wait-container label,
+.login-wait-container span {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.login-wait-container #loginWaitSeconds {
+    width: 100px;
+}
+
+.stop-on-failure-option {
+    display: inline-flex;
+    width: fit-content;
+    max-width: 100%;
+}
+
 /* Form Actions */
 .form-actions {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
     padding-top: 2rem;
     border-top: 1px solid var(--border-color);
@@ -434,6 +471,15 @@ body {
 .action-group {
     display: flex;
     gap: 1rem;
+    justify-content: flex-end;
+}
+
+.execution-option-wrapper {
+    margin-top: 0.5rem;
+}
+
+.execution-option-card {
+    max-width: 520px;
 }
 
 .btn-outline {

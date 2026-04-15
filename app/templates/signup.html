@@ -37,8 +37,8 @@
                             </svg>
                         </div>
                         <div class="benefit-content">
-                            <h3 class="benefit-title">Real-time Vulnerability Detection</h3>
-                            <p class="benefit-desc">Identify access control flaws instantly</p>
+                            <h3 class="benefit-title">Role-Based Vulnerability Analysis</h3>
+                            <p class="benefit-desc">Detect access control flaws through multi-role comparison</p>
                         </div>
                     </div>
                     <div class="benefit-item">
@@ -63,6 +63,8 @@
                     <h2 class="form-title">Create Your Account</h2>
                     <p class="form-subtitle">Start securing your web applications today</p>
                 </div>
+
+                <div id="signupMessage" class="form-message" style="display: none;"></div>
 
                 <form class="signup-form" id="signupForm">
                     <!-- UserName -->
@@ -103,23 +105,6 @@
                         </div>
                         <div class="input-feedback" id="emailFeedback"></div>
                     </div>
-
-                    <!-- Organization -->
-                    <!-- <div class="form-group">
-                        <label for="organization" class="form-label">Organization (Optional)</label>
-                        <div class="input-wrapper">
-                            <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                            </svg>
-                            <input 
-                                type="text" 
-                                id="organization" 
-                                class="form-input" 
-                                placeholder="Your company name"
-                            >
-                        </div>
-                    </div> -->
 
                     <!-- Password -->
                     <div class="form-group">
@@ -181,8 +166,8 @@
                         <label class="checkbox-label">
                             <input type="checkbox" id="terms" class="checkbox-input" required>
                             <span class="checkbox-text">
-                                I agree to the <a href="#" class="link">Terms of Service</a> and 
-                                <a href="#" class="link">Privacy Policy</a>
+                                I agree to the <a href="{{ url_for('main.terms') }}" class="link" target="_blank" rel="noopener">Terms of Service</a> and 
+                                <a href="{{ url_for('main.privacy') }}" class="link" target="_blank" rel="noopener">Privacy Policy</a>
                             </span>
                         </label>
                     </div>
@@ -254,12 +239,12 @@
                         </svg>
                         <span>Google</span>
                     </a>
-                    <a href="{{ url_for('main.github_login') if github_oauth_enabled else '#' }}" class="social-btn {% if not github_oauth_enabled %}disabled{% endif %}">
+                    <!-- <a href="{{ url_for('main.github_login') if github_oauth_enabled else '#' }}" class="social-btn {% if not github_oauth_enabled %}disabled{% endif %}">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
                         </svg>
                         <span>GitHub</span>
-                    </a>
+                    </a> -->
                 </div>
                 {% if not google_oauth_enabled or not github_oauth_enabled %}
                 <p style="margin-top: 0.75rem; color: var(--text-secondary); font-size: 0.875rem;">
@@ -272,6 +257,24 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const toast = (type, message, title) => {
+            const t = window.toastr;
+            if (t && typeof t[type] === 'function') {
+                t[type](message, title);
+                return;
+            }
+
+            const messageEl = document.getElementById('signupMessage');
+            if (messageEl) {
+                messageEl.textContent = message;
+                messageEl.className = `form-message ${type}`;
+                messageEl.style.display = 'block';
+                return;
+            }
+
+            window.alert(message);
+        };
+
         // Toggle password visibility
         document.getElementById('togglePassword').addEventListener('click', function() {
             const passwordInput = document.getElementById('password');
@@ -363,17 +366,17 @@
             const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
             if (password !== confirmPassword) {
-                toastr?.error?.('Passwords do not match!', 'Invalid Input');
+                toast('error', 'Passwords do not match!', 'Invalid Input');
                 return;
             }
 
             if (!terms) {
-                toastr?.error?.('Please accept the Terms of Service and Privacy Policy.', 'Required');
+                toast('error', 'Please accept the Terms of Service and Privacy Policy.', 'Required');
                 return;
             }
 
             if (!emailRegex.test(email)) {
-                toastr?.error?.('Please enter a valid email address.', 'Invalid Email');
+                toast('error', 'Please enter a valid email address.', 'Invalid Email');
                 return;
             }
 
@@ -390,14 +393,21 @@
             fetch('/api/signup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
                 body: JSON.stringify(formData)
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    if (data.verification_required === false) {
+                        toast('success', data.message || 'Account created. Redirecting to login...', 'Success');
+                        window.location.href = data.redirect_url || '/login';
+                        return;
+                    }
+
                     const verificationSection = document.getElementById('verificationSection');
                     verificationSection.style.display = 'block';
-                    toastr?.success?.('Verification code sent. Please check your email.', 'Email Verification');
+                    toast('success', 'Verification code sent. Please check your email.', 'Email Verification');
 
                     document.getElementById('username').disabled = true;
                     document.getElementById('email').disabled = true;
@@ -406,12 +416,12 @@
                     document.getElementById('terms').disabled = true;
                     submitBtn.style.display = 'none';
                 } else {
-                    toastr?.error?.(data.message || 'Unable to send verification code.', 'Signup Failed');
+                    toast('error', data.message || 'Unable to send verification code.', 'Signup Failed');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                toastr?.error?.('An error occurred. Please try again.', 'Error');
+                toast('error', 'An error occurred. Please try again.', 'Error');
             })
             .finally(() => {
                 submitBtn.disabled = false;
@@ -423,7 +433,7 @@
         document.getElementById('verifyBtn')?.addEventListener('click', function() {
             const code = document.getElementById('verificationCode').value.trim();
             if (!code) {
-                toastr?.error?.('Please enter the verification code.', 'Required');
+                toast('error', 'Please enter the verification code.', 'Required');
                 return;
             }
 
@@ -433,20 +443,21 @@
             fetch('/api/signup/verify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
                 body: JSON.stringify({ code })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    toastr?.success?.('Email verified. Redirecting to login...', 'Success');
+                    toast('success', 'Email verified. Redirecting to login...', 'Success');
                     window.location.href = data.redirect_url;
                 } else {
-                    toastr?.error?.(data.message || 'Verification failed.', 'Verification Failed');
+                    toast('error', data.message || 'Verification failed.', 'Verification Failed');
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                toastr?.error?.('An error occurred. Please try again.', 'Error');
+                toast('error', 'An error occurred. Please try again.', 'Error');
             })
             .finally(() => {
                 verifyBtn.disabled = false;

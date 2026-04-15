@@ -12,6 +12,11 @@
     --admin-danger: #ef4444;
     --admin-text: #f9fafb;
     --admin-text-muted: #9ca3af;
+    --admin-sidebar-start: #111827;
+    --admin-sidebar-end: #0a0f1a;
+    --admin-hover-overlay: rgba(255, 255, 255, 0.05);
+    --admin-table-hover: rgba(255, 255, 255, 0.02);
+    --admin-card-shadow: rgba(0, 0, 0, 0.3);
     --admin-sidebar-width: 260px;
 }
 
@@ -23,6 +28,11 @@
     --admin-border: #e2e8f0;
     --admin-text: #1e293b;
     --admin-text-muted: #64748b;
+    --admin-sidebar-start: #ffffff;
+    --admin-sidebar-end: #f8fafc;
+    --admin-hover-overlay: rgba(30, 41, 59, 0.06);
+    --admin-table-hover: rgba(30, 41, 59, 0.04);
+    --admin-card-shadow: rgba(15, 23, 42, 0.1);
 }
 
 * {
@@ -47,7 +57,7 @@ body {
     top: 0;
     width: var(--admin-sidebar-width);
     height: 100vh;
-    background: linear-gradient(180deg, #111827 0%, #0a0f1a 100%);
+    background: linear-gradient(180deg, var(--admin-sidebar-start) 0%, var(--admin-sidebar-end) 100%);
     border-right: 1px solid var(--admin-border);
     display: flex;
     flex-direction: column;
@@ -108,7 +118,7 @@ body {
 
 .nav-item:hover {
     color: var(--admin-text);
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--admin-hover-overlay);
 }
 
 .nav-item.active {
@@ -189,7 +199,7 @@ body {
 
 .stat-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 24px var(--admin-card-shadow);
 }
 
 .stat-icon {
@@ -227,6 +237,30 @@ body {
     color: var(--admin-primary);
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
+}
+
+/* ================================
+   CHARTS
+================================ */
+.charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.chart-card {
+    min-height: 340px;
+}
+
+.chart-body {
+    padding: 1rem 1.25rem 1.25rem;
+    height: 280px;
+}
+
+.chart-body canvas {
+    width: 100% !important;
+    height: 100% !important;
 }
 
 /* ================================
@@ -316,7 +350,35 @@ body {
 }
 
 .admin-table tbody tr:hover {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--admin-table-hover);
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.theme-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    background: var(--admin-surface-2);
+    color: var(--admin-text);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.theme-toggle-btn:hover {
+    color: var(--admin-primary);
+    border-color: var(--admin-primary);
 }
 
 .admin-table.compact th,
@@ -866,10 +928,19 @@ body {
     .dashboard-grid {
         grid-template-columns: 1fr;
     }
+
+    .chart-card {
+        min-height: 320px;
+    }
     
     .admin-header {
         flex-direction: column;
         gap: 1rem;
         align-items: flex-start;
+    }
+
+    .header-actions {
+        width: 100%;
+        justify-content: flex-start;
     }
 }

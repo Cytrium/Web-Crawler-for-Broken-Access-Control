@@ -2,16 +2,18 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash
 from werkzeug.security import generate_password_hash, check_password_hash
-from app.models import SystemUser, Application, Scan, Credential, URL, Violation, Report
+from app.models import SystemUser, UserProfile, Application, Scan, Credential, URL, Violation, Report
 from app import db, oauth
 from datetime import datetime
 import re
 import os
+import json
 import smtplib
 import ssl
 import secrets
 import time
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from email.message import EmailMessage
 
 # Initialize the blueprint
 main = Blueprint('main', __name__)
@@ -36,36 +38,190 @@ def _infer_dvwa_security_level(label: str | None) -> str | None:
 
     return None
 
+def _default_login_url_for_target(target_url: str, label: str | None = None) -> str:
+    """
+    Build a best-effort default login URL for a target.
+    Handles:
+    - DVWA: /login.php
+    - SPA targets (Juice Shop/hash routes): #/login
+    - Generic server-rendered apps: /login
+    """
+    from urllib.parse import urlparse, urlunparse
+
+    target = (target_url or '').strip()
+    if not target:
+        return '/login'
+
+    try:
+        parsed = urlparse(target)
+        if not parsed.scheme or not parsed.netloc:
+            return target.rstrip('/') + '/login'
+
+        app_hint = (label or '').lower()
+        target_lower = target.lower()
+
+        path = parsed.path or '/'
+        fragment = (parsed.fragment or '').strip()
+        fragment_lower = fragment.lower()
+        is_spa_hash = fragment.startswith('/')
+        login_hash = any(k in fragment_lower for k in ('login', 'signin', 'sign-in', 'auth'))
+
+        if is_spa_hash and login_hash:
+            return urlunparse(
+                (parsed.scheme, parsed.netloc, path, '', parsed.query, fragment)
+            )
+
+        base_path = path.rstrip('/')
+        if base_path.lower().endswith('.php'):
+            base_path = base_path.rsplit('/', 1)[0]
+
+        if 'dvwa' in f"{target_lower} {app_hint}":
+            login_path = f"{base_path}/login.php" if base_path else '/login.php'
+            return urlunparse((parsed.scheme, parsed.netloc, login_path, '', '', ''))
+
+        use_spa_login = 'juice' in app_hint or 'juice' in target_lower or is_spa_hash
+        if use_spa_login:
+            spa_path = parsed.path or '/'
+            return urlunparse((parsed.scheme, parsed.netloc, spa_path, '', '', '/login'))
+
+        login_path = f"{base_path}/login" if base_path else '/login'
+        return urlunparse((parsed.scheme, parsed.netloc, login_path, '', '', ''))
+    except Exception:
+        return target.rstrip('/') + '/login'
+
+def _sanitize_login_url_for_target(login_url: str | None, target_url: str, label: str | None = None) -> str:
+    """
+    Preserve explicit login URLs, but auto-correct known bad defaults
+    (especially DVWA '/login' vs '/login.php').
+    """
+    from urllib.parse import urlparse
+
+    fallback = _default_login_url_for_target(target_url, label)
+    candidate = (login_url or '').strip()
+    if not candidate:
+        return fallback
+
+    target_lower = (target_url or '').lower()
+    label_lower = (label or '').lower()
+    is_dvwa = 'dvwa' in f"{target_lower} {label_lower}"
+
+    if is_dvwa:
+        try:
+            path = (urlparse(candidate).path or '').lower().rstrip('/')
+        except Exception:
+            return fallback
+        # Typical imported/generic defaults that are invalid for DVWA.
+        if path.endswith('/login') or '/index.php/login' in path:
+            return fallback
+
+    return candidate
+
 def _get_serializer():
     secret = os.getenv('SECRET_KEY', 'your_secret_key')
     return URLSafeTimedSerializer(secret, salt='password-reset')
 
-def _send_email(to_email, subject, body):
-    host = os.getenv('SMTP_HOST')
+def _send_email(to_email, subject, body_text, body_html=None):
+    host = (os.getenv('SMTP_HOST') or '').strip()
     port = int(os.getenv('SMTP_PORT', '587'))
-    username = os.getenv('SMTP_USERNAME')
-    password = os.getenv('SMTP_PASSWORD')
+    username = (os.getenv('SMTP_USERNAME') or '').strip()
+    password = (os.getenv('SMTP_PASSWORD') or '').replace(' ', '').strip()
     use_tls = os.getenv('SMTP_USE_TLS', '1') == '1'
+    from_name = (os.getenv('SMTP_FROM_NAME') or 'Perimeter').strip()
+    from_email = (os.getenv('SMTP_FROM_EMAIL') or username or '').strip()
 
-    if not host or not username or not password:
+    if not host or not username or not password or not from_email:
         return False
 
-    message = f"Subject: {subject}\nTo: {to_email}\nFrom: {username}\n\n{body}"
     context = ssl.create_default_context()
+    message = EmailMessage()
+    message['Subject'] = subject
+    message['To'] = to_email
+    message['From'] = f"{from_name} <{from_email}>"
+    message.set_content(body_text)
+    if body_html:
+        message.add_alternative(body_html, subtype='html')
 
     try:
         with smtplib.SMTP(host, port, timeout=10) as server:
             if use_tls:
                 server.starttls(context=context)
             server.login(username, password)
-            server.sendmail(username, [to_email], message)
+            server.send_message(message, from_addr=from_email, to_addrs=[to_email])
         return True
     except Exception as e:
         print("Email send error:", e)
         return False
 
+def _email_delivery_configured():
+    return bool(
+        (os.getenv('SMTP_HOST') or '').strip()
+        and (os.getenv('SMTP_USERNAME') or '').strip()
+        and (os.getenv('SMTP_PASSWORD') or '').replace(' ', '').strip()
+    )
+
 def _generate_verification_code():
     return f"{secrets.randbelow(1000000):06d}"
+
+def _build_verification_email(username, code):
+    subject = f"{code} is your Perimeter verification code"
+    body_text = (
+        f"Hi {username},\n\n"
+        f"Your verification code is: {code}\n\n"
+        "Enter this code to finish creating your account. This code expires in 10 minutes."
+    )
+    body_html = f"""\
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{subject}</title>
+  </head>
+  <body style="margin:0;background:#f5f7fb;font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#0b1a3a;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f7fb;padding:32px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:16px;box-shadow:0 10px 30px rgba(11,26,58,0.10);">
+            <tr>
+              <td style="padding:32px 40px 20px 40px;text-align:center;">
+                <div style="font-size:22px;font-weight:700;letter-spacing:0.5px;color:#0b1a3a;">Perimeter</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 40px 8px 40px;text-align:left;font-size:16px;line-height:1.5;">
+                Hi {username},
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 40px 20px 40px;text-align:left;font-size:16px;line-height:1.5;">
+                Please enter this code to verify your email address.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 40px 24px 40px;text-align:center;">
+                <div style="display:inline-block;padding:14px 22px;border-radius:10px;background:#e9eef8;font-size:28px;letter-spacing:4px;font-weight:700;color:#0b1a3a;">
+                  {code}
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 40px 28px 40px;text-align:left;font-size:14px;line-height:1.5;color:#405074;">
+                This code expires in 10 minutes. If you did not request this, no action is necessary.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 40px 28px 40px;text-align:center;font-size:12px;color:#6a7796;">
+                © Perimeter
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+"""
+    return subject, body_text, body_html
 
 def _oauth_configured(provider):
     if provider == 'google':
@@ -98,6 +254,14 @@ def home():
     if "username" in session:
         return redirect(url_for('main.dashboard'))
     return render_template('index.html')
+
+@main.route('/terms')
+def terms():
+    return render_template('terms.html')
+
+@main.route('/privacy')
+def privacy():
+    return render_template('privacy.html')
 
 
 # -------------------------------------------------------
@@ -265,6 +429,7 @@ def signup_post():
         username = data.get('username')
         email = data.get('email')
         password = data.get('password')
+        require_email_verification = os.getenv('REQUIRE_EMAIL_VERIFICATION', '1') == '1'
 
         # Check for missing fields
         if not username or not email or not password:
@@ -285,6 +450,23 @@ def signup_post():
         hashed_password = generate_password_hash(password)
         verification_code = _generate_verification_code()
 
+        if not _email_delivery_configured() and not require_email_verification:
+            new_user = SystemUser(
+                username=username,
+                email=email,
+                password_hash=hashed_password,
+                role="user",
+                created_at=datetime.utcnow()
+            )
+            db.session.add(new_user)
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'message': 'Account created without email verification.',
+                'verification_required': False,
+                'redirect_url': url_for('main.login')
+            }), 201
+
         session['signup_pending'] = {
             'username': username,
             'email': email,
@@ -293,21 +475,34 @@ def signup_post():
         session['signup_code'] = verification_code
         session['signup_code_sent_at'] = time.time()
 
-        sent = _send_email(
-            email,
-            'Verify your Perimeter account',
-            f'Hi {username},\n\nYour verification code is: {verification_code}\n\n'
-            'Enter this code to finish creating your account. This code expires in 10 minutes.'
-        )
+        subject, body_text, body_html = _build_verification_email(username, verification_code)
+        sent = _send_email(email, subject, body_text, body_html)
 
         if not sent:
             session.pop('signup_pending', None)
             session.pop('signup_code', None)
             session.pop('signup_code_sent_at', None)
+            if require_email_verification:
+                return jsonify({
+                    'success': False,
+                    'message': 'Email delivery is not configured. Please contact support.'
+                }), 503
+
+            new_user = SystemUser(
+                username=username,
+                email=email,
+                password_hash=hashed_password,
+                role="user",
+                created_at=datetime.utcnow()
+            )
+            db.session.add(new_user)
+            db.session.commit()
             return jsonify({
-                'success': False,
-                'message': 'Email delivery is not configured. Please contact support.'
-            }), 503
+                'success': True,
+                'message': 'Account created without email verification.',
+                'verification_required': False,
+                'redirect_url': url_for('main.login')
+            }), 201
 
         return jsonify({
             'success': True,
@@ -471,6 +666,16 @@ def google_callback():
             db.session.add(user)
             db.session.commit()
         
+        if name:
+            profile = UserProfile.query.filter_by(user_id=user.user_id).first()
+            if not profile:
+                profile = UserProfile(user_id=user.user_id, full_name=name)
+                db.session.add(profile)
+                db.session.commit()
+            elif not profile.full_name:
+                profile.full_name = name
+                db.session.commit()
+
         # Set session
         session['user_id'] = user.user_id
         session['username'] = user.username
@@ -561,6 +766,16 @@ def github_callback():
             db.session.add(user)
             db.session.commit()
         
+        if name:
+            profile = UserProfile.query.filter_by(user_id=user.user_id).first()
+            if not profile:
+                profile = UserProfile(user_id=user.user_id, full_name=name)
+                db.session.add(profile)
+                db.session.commit()
+            elif not profile.full_name:
+                profile.full_name = name
+                db.session.commit()
+
         # Set session
         session['user_id'] = user.user_id
         session['username'] = user.username
@@ -760,7 +975,7 @@ def start_quick_scan():
         raw_target_url = data.get('target_url', '').strip() or data.get('baseURL', '').strip()
         max_depth = int(data.get('max_depth', 3))
         max_pages = int(data.get('max_pages', 100))
-        crawl_delay = int(data.get('crawl_delay', 1000))  # Delay in milliseconds
+        crawl_delay = int(data.get('crawl_delay', 200))  # Delay in milliseconds
         timeout = int(data.get('timeout', 30))  # Page timeout in seconds
         
         # Role credentials (frontend format)
@@ -796,30 +1011,7 @@ def start_quick_scan():
             if not scan_base_url:
                 scan_base_url = f"{parsed_target.scheme}://{parsed_target.netloc}"
 
-            def _default_login_url_for_target() -> str:
-                fragment = (parsed_target.fragment or '').strip()
-                fragment_lower = fragment.lower()
-                is_spa_hash = fragment.startswith('/')
-                login_hash = any(k in fragment_lower for k in ('login', 'signin', 'sign-in', 'auth'))
-
-                if is_spa_hash and login_hash:
-                    return urlunparse(
-                        (
-                            parsed_target.scheme,
-                            parsed_target.netloc,
-                            parsed_target.path or '/',
-                            '',
-                            parsed_target.query,
-                            fragment
-                        )
-                    )
-
-                app_name_lower = (app_name or '').lower()
-                url_lower = (raw_target_url or '').lower()
-                use_spa_login = 'juice' in app_name_lower or 'juice' in url_lower or is_spa_hash
-                return f"{scan_base_url}/#/login" if use_spa_login else f"{scan_base_url}/login"
-
-            default_login_url = _default_login_url_for_target()
+            default_login_url = _default_login_url_for_target(raw_target_url, app_name)
 
         except Exception:
             return jsonify({'success': False, 'message': 'Invalid URL format'}), 400
@@ -858,8 +1050,16 @@ def start_quick_scan():
         # Convert existing admin/user format to dynamic profiles
         auth_profiles = []
         
-        admin_login_url = (admin_creds.get('login_url') or '').strip() or default_login_url
-        user_login_url = (user_creds.get('login_url') or '').strip() or default_login_url
+        admin_login_url = _sanitize_login_url_for_target(
+            admin_creds.get('login_url'),
+            raw_target_url,
+            app_name
+        )
+        user_login_url = _sanitize_login_url_for_target(
+            user_creds.get('login_url'),
+            raw_target_url,
+            app_name
+        )
 
         # Admin profile (highest privilege)
         if admin_creds.get('username') and admin_creds.get('password'):
@@ -928,6 +1128,7 @@ def start_quick_scan():
             'max_pages': max_pages,
             'crawl_delay': crawl_delay,
             'timeout': timeout,
+            'fast_crawl': True,
             'auth_profiles': auth_profiles,
             'check_bac': check_bac,
             'check_priv_escalation': check_priv_esc,
@@ -1038,6 +1239,43 @@ def get_scan_status(scan_id):
                 'app_name': scan.application.name if scan.application else 'Unknown'
             }
         })
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# -------------------------------------------------------
+# Stop Scan API
+# -------------------------------------------------------
+@main.route('/api/scans/<int:scan_id>/stop', methods=['POST'])
+def stop_scan(scan_id):
+    """
+    Request a running scan to stop gracefully.
+    """
+    try:
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+
+        user_id = session['user_id']
+        scan = Scan.query.filter_by(scan_id=scan_id, user_id=user_id).first()
+
+        if not scan:
+            return jsonify({'success': False, 'message': 'Scan not found'}), 404
+
+        from app.scanner import request_scan_stop, scan_progress
+        request_scan_stop(scan_id, reason='user', detail='Stop requested by user.')
+
+        if scan.status not in ('Completed', 'Failed', 'Stopped'):
+            scan.status = 'Stopping'
+            db.session.commit()
+
+        if scan_id in scan_progress:
+            scan_progress[scan_id].update({
+                'status': 'Stopping',
+                'stage': 'stopping',
+                'current_activity': 'Stopping scan...'
+            })
+
+        return jsonify({'success': True, 'message': 'Stop request submitted.'})
 
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -1220,7 +1458,12 @@ def start_batch_scan():
         options = data.get('options', {})
         max_depth = int(data.get('max_depth', 3))
         max_pages = int(data.get('max_pages', 100))
+        crawl_delay = int(data.get('crawl_delay', 1000))
+        timeout = int(data.get('timeout', 30))
         delay_between_scans = int(data.get('delay_between_scans', 5))
+        manual_login = bool(data.get('manual_login', False))
+        login_wait_seconds = int(data.get('login_wait_seconds', 120))
+        global_dvwa_security = (data.get('dvwa_security_level') or '').strip().lower()
 
         # Check BAC-related options
         check_bac = options.get('check_broken_access_control', True)
@@ -1251,10 +1494,15 @@ def start_batch_scan():
                 continue
             
             if target_url not in targets:
+                profile_name = profile.get('profile_name', 'Batch Scan Target')
                 targets[target_url] = {
-                    'profile_name': profile.get('profile_name', 'Batch Scan Target'),
+                    'profile_name': profile_name,
                     'target_website': target_url,
-                    'login_url': profile.get('login_url', f"{target_url}/login"),
+                    'login_url': _sanitize_login_url_for_target(
+                        profile.get('login_url'),
+                        target_url,
+                        profile_name
+                    ),
                     'credentials': []
                 }
             
@@ -1264,11 +1512,16 @@ def start_batch_scan():
             password = profile.get('password', '')
             
             if username and password:
+                default_login_url = _default_login_url_for_target(target_url, targets[target_url]['profile_name'])
                 targets[target_url]['credentials'].append({
                     'role': role,
                     'username': username,
                     'password': password,
-                    'login_url': profile.get('login_url', '') or targets[target_url]['login_url']
+                    'login_url': _sanitize_login_url_for_target(
+                        profile.get('login_url') or targets[target_url]['login_url'] or default_login_url,
+                        target_url,
+                        targets[target_url]['profile_name']
+                    )
                 })
 
         if not targets:
@@ -1357,6 +1610,7 @@ def start_batch_scan():
 
             dvwa_security_level = (
                 (target_data.get('dvwa_security_level') or '').strip().lower()
+                or global_dvwa_security
                 or _infer_dvwa_security_level(app_name)
             )
             if dvwa_security_level not in (None, '', 'low', 'medium', 'high', 'impossible'):
@@ -1377,6 +1631,9 @@ def start_batch_scan():
                 'base_url': target_url,
                 'max_depth': max_depth,
                 'max_pages': max_pages,
+                'crawl_delay': crawl_delay,
+                'timeout': timeout,
+                'fast_crawl': True,
                 'auth_profiles': scanner_profiles,
                 'check_bac': check_bac,
                 'check_priv_escalation': check_priv_esc,
@@ -1384,6 +1641,8 @@ def start_batch_scan():
                 'check_forced_browsing': check_forced_browsing,
                 'check_auth_bypass': check_auth_bypass,
                 'capture_screenshots': capture_screenshots,
+                'manual_login': manual_login,
+                'login_wait_seconds': login_wait_seconds,
                 'dvwa_security_level': dvwa_security_level,
                 'spa_mode': spa_mode
             }
@@ -1499,6 +1758,59 @@ def report(scan_id=None):
             delta = scan.end_time - scan.start_time
             duration = str(delta).split('.')[0]  # Remove microseconds
 
+        summary_data = {}
+        if report_data and report_data.summary:
+            try:
+                summary_data = json.loads(report_data.summary)
+            except Exception:
+                summary_data = {}
+
+        def _fmt_list(value):
+            if not value:
+                return 'None'
+            if isinstance(value, list):
+                return ', '.join(str(v) for v in value)
+            return str(value)
+
+        def _fmt_dvwa_applied(value):
+            if not value:
+                return 'Unknown'
+            if isinstance(value, dict):
+                parts = []
+                for role, applied in value.items():
+                    if applied is True:
+                        state = 'applied'
+                    elif applied is False:
+                        state = 'failed'
+                    else:
+                        state = 'unknown'
+                    parts.append(f"{role}: {state}")
+                return ', '.join(parts) if parts else 'Unknown'
+            return str(value)
+
+        spa_mode_value = summary_data.get('spa_mode')
+        if spa_mode_value is True:
+            spa_mode = 'On'
+        elif spa_mode_value is False:
+            spa_mode = 'Off'
+        else:
+            spa_mode = 'Unknown'
+
+        dvwa_security_level = summary_data.get('dvwa_security_level') or 'Not set'
+        if dvwa_security_level == 'Not set':
+            dvwa_applied = 'Not set'
+        else:
+            dvwa_applied = _fmt_dvwa_applied(summary_data.get('dvwa_security_applied'))
+
+        debug_info = {
+            'roles_crawled': _fmt_list(summary_data.get('roles_crawled')),
+            'auth_failures': _fmt_list(summary_data.get('auth_failures')),
+            'spa_mode': spa_mode,
+            'spa_mode_reason': summary_data.get('spa_mode_reason') or 'Unknown',
+            'dvwa_security_level': dvwa_security_level,
+            'dvwa_security_applied': dvwa_applied
+        }
+
         return render_template(
             'report.html',
             username=user.username,
@@ -1508,6 +1820,7 @@ def report(scan_id=None):
             urls_count=len(urls),
             duration=duration,
             report_data=report_data,
+            debug_info=debug_info,
             is_admin=user.is_admin
         )
     except Exception as e:
@@ -1769,14 +2082,72 @@ def settings():
     if not user:
         session.clear()
         return redirect(url_for('main.login'))
+
+    profile = UserProfile.query.filter_by(user_id=user.user_id).first()
+    full_name = (profile.full_name if profile and profile.full_name else session.get('full_name', ''))
     
     return render_template(
         'settings.html',
         username=user.username,
         email=user.email,
-        full_name=session.get('full_name', ''),
+        full_name=full_name,
         is_admin=user.is_admin
     )
+
+
+@main.route('/api/settings/profile', methods=['POST'])
+def update_profile_settings():
+    """Update account profile fields (email and full name)."""
+    try:
+        if 'user_id' not in session:
+            return jsonify({'success': False, 'message': 'User not authenticated'}), 401
+
+        user_id = session['user_id']
+        user = SystemUser.query.get(user_id)
+        if not user:
+            session.clear()
+            return jsonify({'success': False, 'message': 'User not found'}), 404
+
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip().lower()
+        full_name = (data.get('full_name') or '').strip()
+
+        if not email:
+            return jsonify({'success': False, 'message': 'Email is required.'}), 400
+
+        if not re.match(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$', email):
+            return jsonify({'success': False, 'message': 'Please enter a valid email address.'}), 400
+
+        email_owner = SystemUser.query.filter(SystemUser.email == email, SystemUser.user_id != user_id).first()
+        if email_owner:
+            return jsonify({'success': False, 'message': 'Email is already in use by another account.'}), 409
+
+        user.email = email
+
+        profile = UserProfile.query.filter_by(user_id=user_id).first()
+        if full_name:
+            if not profile:
+                profile = UserProfile(user_id=user_id, full_name=full_name)
+                db.session.add(profile)
+            else:
+                profile.full_name = full_name
+        elif profile:
+            profile.full_name = None
+
+        db.session.commit()
+
+        session['full_name'] = full_name
+
+        return jsonify({
+            'success': True,
+            'message': 'Profile updated successfully.',
+            'email': user.email,
+            'full_name': full_name
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 # -------------------------------------------------------

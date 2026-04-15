@@ -14,6 +14,20 @@ db = SQLAlchemy()
 migrate = Migrate()
 oauth = OAuth()
 
+def _normalize_database_url(raw):
+    """
+    Normalize DATABASE_URL values for SQLAlchemy.
+
+    Render commonly provides DATABASE_URL as a plain scheme (e.g. mysql://...).
+    SQLAlchemy needs a dialect+driver for MySQL when using PyMySQL.
+    """
+    if not raw:
+        return None
+    url = str(raw).strip()
+    if url.startswith("mysql://"):
+        return "mysql+pymysql://" + url[len("mysql://"):]
+    return url
+
 def create_app():
     print("🧩 Flask is initializing...")
     app = Flask(__name__)
@@ -21,8 +35,9 @@ def create_app():
     # Load secret key from environment or use default for development
     app.secret_key = os.getenv('SECRET_KEY', 'your_secret_key')
 
-    # MySQL Database Configuration
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/perimeter'
+    # Database Configuration (Render-friendly: use env vars; do not require .env at runtime)
+    db_url = _normalize_database_url(os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_DATABASE_URI"))
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url or 'mysql+pymysql://root:@localhost/perimeter'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     try:

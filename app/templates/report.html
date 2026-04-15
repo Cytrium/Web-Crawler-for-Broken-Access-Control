@@ -312,12 +312,30 @@
             text-align: left;
             border-bottom: 1px solid var(--border-color);
         }
-        
+
+        .urls-table th.url-col,
+        .urls-table td.url-col {
+            min-width: 420px;
+        }
+
+        .urls-table th.status-col {
+            white-space: nowrap;
+            word-break: keep-all;
+            overflow-wrap: normal;
+            min-width: 150px;
+            text-align: center;
+        }
+
         .urls-table td {
             padding: 0.75rem 1rem;
             border-bottom: 1px solid var(--border-color);
             color: var(--text-primary);
             font-size: 0.875rem;
+        }
+
+        .urls-table td.status-col {
+            text-align: center;
+            white-space: nowrap;
         }
         
         .urls-table tr:last-child td {
@@ -359,6 +377,27 @@
         }
         
         .http-status.error {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .access-badge {
+            display: inline-block;
+            margin-top: 0.35rem;
+            padding: 0.15rem 0.45rem;
+            border-radius: 0.25rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .access-badge.allowed {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+        }
+
+        .access-badge.denied {
             background: rgba(239, 68, 68, 0.15);
             color: #ef4444;
         }
@@ -494,9 +533,9 @@
         </div>
 
         <!-- Statistics Cards -->
-        <div class="stats-grid">
-            <div class="stat-card-report">
-                <div class="stat-icon info">
+          <div class="stats-grid">
+              <div class="stat-card-report">
+                  <div class="stat-icon info">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
                         <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
@@ -536,12 +575,44 @@
                 <div class="stat-content">
                     <div class="stat-value">{{ scan.maxDepth or 3 }}</div>
                     <div class="stat-label">Max Depth</div>
-                </div>
-            </div>
-        </div>
+                  </div>
+              </div>
+          </div>
 
-        <!-- Scanned URLs Section -->
-        <div class="urls-section">
+          {% if debug_info %}
+          <div class="violations-section" style="margin-bottom: 2rem;">
+              <h3 class="section-title">Scan Debug</h3>
+              <div class="scan-meta" style="margin-top: 0;">
+                  <div class="meta-item">
+                      <span class="meta-label">Roles Crawled</span>
+                      <span class="meta-value">{{ debug_info.roles_crawled }}</span>
+                  </div>
+                  <div class="meta-item">
+                      <span class="meta-label">Auth Failures</span>
+                      <span class="meta-value">{{ debug_info.auth_failures }}</span>
+                  </div>
+                  <div class="meta-item">
+                      <span class="meta-label">SPA Mode</span>
+                      <span class="meta-value">{{ debug_info.spa_mode }}</span>
+                  </div>
+                  <div class="meta-item">
+                      <span class="meta-label">SPA Reason</span>
+                      <span class="meta-value">{{ debug_info.spa_mode_reason }}</span>
+                  </div>
+                  <div class="meta-item">
+                      <span class="meta-label">DVWA Security Level</span>
+                      <span class="meta-value">{{ debug_info.dvwa_security_level }}</span>
+                  </div>
+                  <div class="meta-item">
+                      <span class="meta-label">DVWA Level Applied</span>
+                      <span class="meta-value">{{ debug_info.dvwa_security_applied }}</span>
+                  </div>
+              </div>
+          </div>
+          {% endif %}
+
+          <!-- Scanned URLs Section -->
+          <div class="urls-section">
             <div class="section-header-toggle" onclick="toggleUrlsSection()">
                 <h3 class="section-title" style="margin-bottom: 0;">Scanned URLs</h3>
                 <button class="btn-toggle" id="urls-toggle-btn">
@@ -559,17 +630,17 @@
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>URL</th>
-                                <th>Admin Status</th>
-                                <th>User Status</th>
-                                <th>Guest Status</th>
+                                <th class="url-col">URL</th>
+                                <th class="status-col">Admin&nbsp;Status</th>
+                                <th class="status-col">User&nbsp;Status</th>
+                                <th class="status-col">Guest&nbsp;Status</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for url in urls %}
                             <tr>
                                 <td>{{ loop.index }}</td>
-                                <td>
+                                <td class="url-col">
                                     <a href="{{ url.url }}" target="_blank" class="url-link">{{ url.url }}</a>
                                 </td>
                                 
@@ -588,9 +659,27 @@
                                     {% endif %}
                                 {% endmacro %}
 
-                                <td>{{ status_badge(url.admin_status) }}</td>
-                                <td>{{ status_badge(url.user_status) }}</td>
-                                <td>{{ status_badge(url.guest_status) }}</td>
+                                {% macro access_badge(roles, role) %}
+                                    {% set roles_str = (roles or '')|lower|replace(' ', '') %}
+                                    {% if roles_str and (',' ~ role ~ ',') in (',' ~ roles_str ~ ',') %}
+                                        <span class="access-badge allowed">Allowed</span>
+                                    {% else %}
+                                        <span class="access-badge denied">Denied</span>
+                                    {% endif %}
+                                {% endmacro %}
+
+                                <td class="status-col">
+                                    {{ status_badge(url.admin_status) }}
+                                    <div>{{ access_badge(url.accessible_roles, 'admin') }}</div>
+                                </td>
+                                <td class="status-col">
+                                    {{ status_badge(url.user_status) }}
+                                    <div>{{ access_badge(url.accessible_roles, 'user') }}</div>
+                                </td>
+                                <td class="status-col">
+                                    {{ status_badge(url.guest_status) }}
+                                    <div>{{ access_badge(url.accessible_roles, 'guest') }}</div>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>

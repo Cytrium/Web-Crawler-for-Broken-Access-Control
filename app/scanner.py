@@ -21,6 +21,7 @@ URLs are compared across roles to detect BAC vulnerabilities.
 """
 
 from urllib.parse import urljoin, urlparse, urlunparse, parse_qsl, urlencode
+from urllib.request import Request, urlopen
 from datetime import datetime
 from threading import Thread
 import time
@@ -33,6 +34,31 @@ from collections import deque
 
 # Global dictionary to track scan progress
 scan_progress = {}
+
+# Global dictionary to track stop requests
+scan_stop_requests = {}
+
+
+class ScanStopped(Exception):
+    """Raised when a scan is stopped by user request or system limit."""
+    pass
+
+
+def request_scan_stop(scan_id, reason='user', detail=None):
+    """Request a scan to stop gracefully."""
+    global scan_stop_requests, scan_progress
+    scan_stop_requests[scan_id] = {
+        'stop': True,
+        'reason': reason,
+        'detail': detail or '',
+        'time': datetime.utcnow().isoformat()
+    }
+    if scan_id in scan_progress:
+        scan_progress[scan_id].update({
+            'status': 'Stopping',
+            'stage': 'stopping',
+            'current_activity': detail or 'Stopping scan...'
+        })
 
 
 class QuickScanner:
@@ -79,6 +105,7 @@ class QuickScanner:
         self.crawl_delay_ms = int(config.get('crawl_delay', 500))
         self.timeout_seconds = int(config.get('timeout', 30))
         self.timeout_ms = max(5000, self.timeout_seconds * 1000)
+        self.fast_crawl = bool(config.get('fast_crawl', False))
         
         # Authentication profiles from config
         # Each profile: {role_name, username, password, login_url, privilege_level}
@@ -93,17 +120,35 @@ class QuickScanner:
         self.capture_screenshots = config.get('capture_screenshots', False)
         self.debug_access_matrix = config.get('debug_access_matrix', False)
         self.spa_mode = config.get('spa_mode', False)
+        self.debug_spa_access = config.get('debug_spa_access', self.debug_access_matrix)
+        self.spa_mode_reason = 'config' if self.spa_mode else 'disabled'
+        self.spa_protected_routes = {
+            '/administration': 'admin',
+            '/address': 'auth',
+            '/change-password': 'auth',
+            '/accounting': 'auth',
+        }
 
         # Target-specific settings (optional)
         # DVWA security levels: low, medium, high, impossible
         self.dvwa_security_level = (config.get('dvwa_security_level') or '').strip().lower() or None
         if self.dvwa_security_level not in (None, 'low', 'medium', 'high', 'impossible'):
             self.dvwa_security_level = None
+        # Track whether DVWA security level was successfully applied per role
+        self.dvwa_security_applied = {}
         
         # Manual login options (for complex auth flows like CAPTCHA, 2FA, SSO)
         # Can be set via environment variables or config
         self.manual_login = config.get('manual_login', os.getenv("MANUAL_LOGIN", "0") == "1")
         self.login_wait_seconds = config.get('login_wait_seconds', int(os.getenv("LOGIN_WAIT_SECONDS", "120")))
+
+        # Optional time budget for quick scans (seconds). 0 means no limit.
+        self.time_budget_seconds = int(config.get('time_budget_seconds', 0) or 0)
+        self._start_ts = None
+
+        if self.fast_crawl and self.timeout_ms > 15000:
+            self.timeout_ms = 15000
+            self.timeout_seconds = int(self.timeout_ms / 1000)
         
         # State tracking - URLs discovered per role
         self.urls_by_role = {}  # {role_name: set(urls)}
@@ -175,6 +220,218 @@ class QuickScanner:
         global scan_progress
         if self.scan_id in scan_progress:
             scan_progress[self.scan_id].update(kwargs)
+
+    def _elapsed_seconds(self):
+        if self._start_ts is None:
+            return 0
+        return time.monotonic() - self._start_ts
+
+    def _effective_delay_ms(self):
+        if self.fast_crawl:
+            return max(0, min(self.crawl_delay_ms, 100))
+        return self.crawl_delay_ms
+
+    def _post_goto_wait(self, page):
+        if not self.spa_mode:
+            return
+        if self.fast_crawl:
+            try:
+                page.wait_for_timeout(50)
+            except Exception:
+                pass
+            return
+        try:
+            page.wait_for_load_state('networkidle', timeout=min(8000, self.timeout_ms))
+        except Exception:
+            pass
+        try:
+            page.wait_for_timeout(750)
+        except Exception:
+            pass
+
+    def _check_time_budget(self, where=None):
+        if not self.time_budget_seconds or self._start_ts is None:
+            return
+        if self._elapsed_seconds() >= self.time_budget_seconds:
+            message = f"Time limit reached ({self.time_budget_seconds}s)."
+            if where:
+                message = f"{message} (during {where})"
+            self._request_stop('time_limit', message)
+            raise ScanStopped(message)
+
+    def _is_stop_requested(self):
+        global scan_stop_requests
+        return scan_stop_requests.get(self.scan_id, {}).get('stop', False)
+
+    def _request_stop(self, reason, detail=None):
+        if not self._is_stop_requested():
+            request_scan_stop(self.scan_id, reason=reason, detail=detail)
+
+    def _raise_if_stopped(self, where=None):
+        self._check_time_budget(where)
+        if self._is_stop_requested():
+            info = scan_stop_requests.get(self.scan_id, {})
+            reason = info.get('reason', 'user')
+            detail = info.get('detail', '')
+            if reason == 'url_limit':
+                message = detail or f"URL limit reached ({self.max_pages})."
+            else:
+                message = detail or 'Stopped by user.'
+            if where:
+                message = f"{message} (during {where})"
+            raise ScanStopped(message)
+
+    def _debug_log(self, message):
+        if self.debug_spa_access:
+            print(f"[DEBUG] {message}")
+
+    def _strip_fragment(self, url):
+        try:
+            parsed = urlparse(url)
+            return urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', parsed.query, ''))
+        except Exception:
+            return url
+
+    def _is_dvwa_target(self):
+        target_text = ' '.join([
+            (self.base_url or ''),
+            str(self.config.get('target_url') or ''),
+            str(self.config.get('app_name') or ''),
+            str(self.config.get('application_name') or ''),
+        ]).lower()
+        return 'dvwa' in target_text
+
+    def _is_dvwa_protected_path(self, url):
+        if not self._is_dvwa_target() or not url:
+            return False
+        try:
+            path = (urlparse(url).path or '').lower()
+        except Exception:
+            return False
+        return '/vulnerabilities/' in path
+
+    def _is_dvwa_authbypass_path(self, url):
+        if not self._is_dvwa_target() or not url:
+            return False
+        try:
+            path = (urlparse(url).path or '').lower()
+        except Exception:
+            return False
+        return '/vulnerabilities/authbypass' in path
+
+    def _looks_like_spa_shell(self, html):
+        html_lower = (html or '').lower()
+        if not html_lower:
+            return False
+        spa_markers = [
+            '<app-root',
+            'ng-version',
+            'window.__env',
+            'id="root"',
+            'id="app"',
+            'main.',
+            'runtime.',
+            'polyfills.',
+            'owasp juice shop',
+        ]
+        marker_hits = [marker for marker in spa_markers if marker in html_lower]
+        return len(marker_hits) >= 2
+
+    def _fetch_probe_html(self, url):
+        try:
+            req = Request(url, headers={'User-Agent': 'PerimeterScanner/1.0'})
+            timeout = max(5, min(15, self.timeout_seconds))
+            with urlopen(req, timeout=timeout) as response:
+                status = int(getattr(response, 'status', 0) or 0)
+                content_type = (response.headers.get('content-type') or '').lower()
+                body = response.read(200000)
+                text = body.decode('utf-8', errors='ignore')
+                return {
+                    'status': status,
+                    'content_type': content_type,
+                    'text': text,
+                    'hash': hashlib.sha256(text.encode('utf-8', errors='ignore')).hexdigest() if text else '',
+                }
+        except Exception:
+            return None
+
+    def _detect_spa_mode_from_target(self):
+        if self._is_dvwa_target():
+            return False, 'dvwa-target'
+
+        base_url_lower = (self.base_url or '').lower()
+        if '#/' in base_url_lower:
+            return True, 'hash-route-in-url'
+
+        target_hints = ' '.join([
+            base_url_lower,
+            str(self.config.get('target_url') or '').lower(),
+            str(self.config.get('app_name') or '').lower(),
+            str(self.config.get('application_name') or '').lower(),
+        ])
+        if 'juice' in target_hints:
+            return True, 'juice-target-hint'
+
+        probe_url = self._strip_fragment(self.base_url)
+        probe = self._fetch_probe_html(probe_url)
+        if not probe:
+            return False, 'no-spa-signals'
+
+        if 'text/html' not in (probe.get('content_type') or ''):
+            return False, 'non-html-target'
+
+        if self._looks_like_spa_shell(probe.get('text')):
+            probe_path = urljoin((probe_url.rstrip('/') + '/'), '__perimeter_spa_probe__')
+            probe_alt = self._fetch_probe_html(probe_path)
+            if probe_alt and 'text/html' in (probe_alt.get('content_type') or ''):
+                if self._looks_like_spa_shell(probe_alt.get('text')):
+                    same_shell = probe.get('hash') and probe.get('hash') == probe_alt.get('hash')
+                    if not same_shell:
+                        ratio = difflib.SequenceMatcher(
+                            None,
+                            probe.get('text', '')[:4000],
+                            probe_alt.get('text', '')[:4000]
+                        ).ratio()
+                        same_shell = ratio >= 0.9
+                    if same_shell and probe_alt.get('status', 0) < 400:
+                        return True, 'spa-shell-multi-route'
+            return True, 'spa-shell-html'
+
+        return False, 'no-spa-signals'
+
+    def _ensure_spa_mode(self):
+        if self._is_dvwa_target():
+            self.spa_mode = False
+            self.spa_mode_reason = 'dvwa-target'
+            print("🧭 SPA mode disabled (dvwa-target)")
+            return
+
+        if self.spa_mode:
+            self.spa_mode_reason = 'config'
+            print("🧭 SPA mode enabled (config)")
+            return
+
+        detected, reason = self._detect_spa_mode_from_target()
+        if detected:
+            self.spa_mode = True
+            self.spa_mode_reason = reason
+            print(f"🧭 SPA mode enabled ({reason})")
+        else:
+            self.spa_mode = False
+            self.spa_mode_reason = reason
+            print(f"🧭 SPA mode disabled ({reason})")
+
+    def _enable_spa_mode_from_discovery(self, raw_route, source_url=''):
+        if self.spa_mode:
+            return
+        if self._is_dvwa_target():
+            return
+        raw = (raw_route or '').strip().lower()
+        if raw.startswith('#/') or raw.startswith('/#/') or '/#/' in raw:
+            self.spa_mode = True
+            self.spa_mode_reason = 'discovered-hash-route'
+            note = f" while parsing {source_url}" if source_url else ''
+            print(f"🧭 SPA mode enabled (discovered-hash-route{note})")
 
     def _get_spa_seed_routes(self):
         return [
@@ -253,6 +510,10 @@ class QuickScanner:
                 
                 scan.status = 'Running'
                 self.db.session.commit()
+                if self._start_ts is None:
+                    self._start_ts = time.monotonic()
+
+                self._raise_if_stopped('start')
                 
                 # Step 1: Validate configuration
                 self._update_progress(
@@ -264,6 +525,12 @@ class QuickScanner:
                 validation_result = self._validate_config()
                 if not validation_result['valid']:
                     raise ValueError(validation_result['message'])
+
+                # Auto-enable SPA mode only when the target looks like a SPA (e.g., Juice Shop).
+                # Keep DVWA on server-rendered flow unless explicitly configured otherwise.
+                self._ensure_spa_mode()
+
+                self._raise_if_stopped('validate')
                 
                 # Set base path after validation
                 self.base_path = self._get_base_path(self.base_url)
@@ -278,6 +545,8 @@ class QuickScanner:
                     progress_percent=5
                 )
                 self._determine_roles_to_crawl()
+
+                self._raise_if_stopped('init')
                 
                 # Step 3: Initialize Playwright
                 self._update_progress(
@@ -287,10 +556,13 @@ class QuickScanner:
                     progress_percent=8
                 )
                 self._init_playwright()
+
+                self._raise_if_stopped('init')
                 
                 # Step 4: Create contexts and authenticate
                 total_roles = len(self.roles_to_crawl)
                 for idx, role in enumerate(self.roles_to_crawl):
+                    self._raise_if_stopped('login')
                     role_progress_start = 10 + (idx * 8)
                     self._update_progress(
                         status='Login',
@@ -308,6 +580,7 @@ class QuickScanner:
 
                 # Step 5: Crawl with each role
                 for idx, role in enumerate(self.roles_to_crawl):
+                    self._raise_if_stopped('crawl')
                     if role not in self.role_contexts:
                         continue
                     role_progress_start = 20 + (idx * 15)
@@ -326,8 +599,10 @@ class QuickScanner:
                         urls_discovered=len(self.all_discovered_urls),
                         progress_percent=role_progress_start + 10
                     )
+                    self._raise_if_stopped('crawl')
 
                 # Step 6: Cross-role retest
+                self._raise_if_stopped('retest')
                 self._update_progress(
                     status='Retest',
                     stage='retest',
@@ -337,6 +612,7 @@ class QuickScanner:
                 self._cross_role_test()
 
                 # Step 7: Persist discovered URLs (needed before violations)
+                self._raise_if_stopped('save')
                 self._update_progress(
                     status='Save',
                     stage='save',
@@ -346,6 +622,7 @@ class QuickScanner:
                 self._persist_urls()
 
                 # Step 8: Compare URLs and detect BAC violations
+                self._raise_if_stopped('analyze')
                 self._update_progress(
                     status='Analyze',
                     stage='analyze',
@@ -356,9 +633,11 @@ class QuickScanner:
 
                 # Additional security tests
                 if self.test_session:
+                    self._raise_if_stopped('tests')
                     self._test_session_management()
 
                 # Step 7: Finalize and generate report
+                self._raise_if_stopped('finalize')
                 self._update_progress(
                     status='Finalizing',
                     stage='finalize',
@@ -411,7 +690,100 @@ class QuickScanner:
                     'roles_crawled': list(self.urls_by_role.keys()),
                     'auth_failures': self.auth_failures
                 }
-                
+
+            except ScanStopped as e:
+                stop_info = scan_stop_requests.get(self.scan_id, {})
+                reason = stop_info.get('reason', 'user')
+                detail = stop_info.get('detail', str(e))
+
+                # Graceful early-complete for limits (URL/time)
+                if reason in ('url_limit', 'time_limit'):
+                    try:
+                        self._update_progress(
+                            status='Finalizing',
+                            stage='finalize',
+                            current_activity=detail or 'Saving partial results...',
+                            progress_percent=95
+                        )
+                        self._persist_urls()
+                        self._compare_and_detect_violations()
+                    except Exception as persist_error:
+                        scan = Scan.query.get(self.scan_id)
+                        if scan:
+                            scan.status = 'Failed'
+                            self.db.session.commit()
+                        self._update_progress(
+                            status='Failed',
+                            stage='failed',
+                            current_activity=f'Error saving partial results: {persist_error}',
+                            progress_percent=0
+                        )
+                        return {'success': False, 'message': str(persist_error)}
+
+                    scan = Scan.query.get(self.scan_id)
+                    if scan:
+                        scan.status = 'Completed'
+                        scan.end_time = datetime.utcnow()
+                        try:
+                            from app.models import Violation, URL as UrlModel
+                            self.db.session.flush()
+                            scan.vulnerable_count = (
+                                self.db.session.query(Violation)
+                                .join(UrlModel, Violation.url_id == UrlModel.url_id)
+                                .filter(UrlModel.scan_id == self.scan_id)
+                                .count()
+                            )
+                        except Exception:
+                            scan.vulnerable_count = len(self.violations)
+                        self.db.session.commit()
+
+                        report = Report(
+                            scan_id=self.scan_id,
+                            generated_at=datetime.utcnow(),
+                            summary=self._generate_summary()
+                        )
+                        self.db.session.add(report)
+                        self.db.session.commit()
+
+                    self._update_progress(
+                        status='Completed',
+                        stage='complete',
+                        current_activity=detail or str(e),
+                        urls_tested=len(self.all_discovered_urls),
+                        violations_found=len(self.violations),
+                        progress_percent=100
+                    )
+
+                    return {
+                        'success': True,
+                        'completed_early': True,
+                        'message': detail or str(e),
+                        'urls_found': len(self.all_discovered_urls),
+                        'violations_found': len(self.violations),
+                        'roles_crawled': list(self.urls_by_role.keys()),
+                        'auth_failures': self.auth_failures
+                    }
+
+                # Mark scan as stopped (user-initiated)
+                scan = Scan.query.get(self.scan_id)
+                if scan:
+                    scan.status = 'Stopped'
+                    scan.end_time = datetime.utcnow()
+                    self.db.session.commit()
+
+                current_percent = 0
+                if self.scan_id in scan_progress:
+                    current_percent = scan_progress[self.scan_id].get('progress_percent', 0)
+
+                self._update_progress(
+                    status='Stopped',
+                    stage='stopped',
+                    current_activity=str(e),
+                    progress_percent=current_percent
+                )
+
+                return {'success': False, 'stopped': True, 'message': str(e)}
+
             except Exception as e:
                 import traceback
                 error_trace = traceback.format_exc()
@@ -426,7 +798,6 @@ class QuickScanner:
                 )
                 
                 # Add error to progress tracking
-                global scan_progress
                 if self.scan_id in scan_progress:
                     scan_progress[self.scan_id]['errors'].append({
                         'time': datetime.utcnow().isoformat(),
@@ -442,6 +813,8 @@ class QuickScanner:
                 print(f"❌ Scanner Error: {e}")
                 return {'success': False, 'message': str(e)}
             finally:
+                if self.scan_id in scan_stop_requests:
+                    scan_stop_requests.pop(self.scan_id, None)
                 self._cleanup()
     
     def _validate_config(self):
@@ -465,9 +838,9 @@ class QuickScanner:
             self.max_pages = 100
         if self.crawl_delay_ms < 0:
             self.crawl_delay_ms = 200
-        if self.timeout_seconds < 5 or self.timeout_seconds > 120:
+        if self.timeout_seconds < 5:
             self.timeout_seconds = 30
-            self.timeout_ms = max(5000, self.timeout_seconds * 1000)
+        self.timeout_ms = max(5000, self.timeout_seconds * 1000)
         
         return {'valid': True, 'message': 'Configuration valid'}
     
@@ -550,7 +923,10 @@ class QuickScanner:
         if not self.dvwa_security_level:
             return
 
-        security_url = urljoin(self.base_url.rstrip('/') + '/', 'security.php')
+        # urljoin(self.base_url, 'security.php') correctly resolves:
+        # - http://host/DVWA/            -> /DVWA/security.php
+        # - http://host/DVWA/index.php   -> /DVWA/security.php
+        security_url = urljoin(self.base_url, 'security.php')
         page = None
 
         try:
@@ -559,6 +935,7 @@ class QuickScanner:
 
             select_locator = page.locator('select[name="security"]')
             if select_locator.count() == 0:
+                self.dvwa_security_applied[role_name] = False
                 return
 
             select_locator.select_option(self.dvwa_security_level)
@@ -598,6 +975,7 @@ class QuickScanner:
                     f"Requested '{self.dvwa_security_level}', select='{selected}'."
                 )
                 print(f"WARNING: {warning}")
+                self.dvwa_security_applied[role_name] = False
                 global scan_progress
                 if self.scan_id in scan_progress:
                     scan_progress[self.scan_id]['errors'].append({
@@ -605,8 +983,10 @@ class QuickScanner:
                         'message': warning
                     })
             else:
+                self.dvwa_security_applied[role_name] = True
                 print(f"[{role_name}] DVWA security level set to: {self.dvwa_security_level}")
         except Exception as e:
+            self.dvwa_security_applied[role_name] = False
             print(f"WARNING: [{role_name}] DVWA security level apply failed: {e}")
         finally:
             try:
@@ -784,15 +1164,7 @@ class QuickScanner:
             print(f"="*60 + "\n")
             
             page.goto(login_url, timeout=30000, wait_until='domcontentloaded')
-            if self.spa_mode:
-                try:
-                    page.wait_for_load_state('networkidle', timeout=8000)
-                except Exception:
-                    pass
-                try:
-                    page.wait_for_timeout(750)
-                except Exception:
-                    pass
+            self._post_goto_wait(page)
             
             # Store initial URL for comparison
             initial_url = page.url.lower()
@@ -990,10 +1362,23 @@ class QuickScanner:
             return True
 
     def _detect_login_form(self, page):
+        """
+        Detect an active/visible login form.
+
+        Many SPAs keep hidden auth dialogs in the DOM, so checking for any
+        password field creates false "denied" signals. We only treat it as a
+        login form when a visible password input (or visible login form) exists.
+        """
         try:
-            if page.locator('input[type="password"]').count() > 0:
+            if page.locator('input[type="password"]:visible').count() > 0:
                 return True
-            if page.locator('form:has(input[type="password"])').count() > 0:
+            if page.locator('form:visible:has(input[type="password"])').count() > 0:
+                return True
+            if page.locator(
+                'form:visible:has(input[type="email"]), form:visible:has(input[name*="user" i])'
+            ).count() > 0 and page.locator(
+                'form:visible button:has-text("login"), form:visible button:has-text("sign in")'
+            ).count() > 0:
                 return True
         except Exception:
             return False
@@ -1025,10 +1410,10 @@ class QuickScanner:
     def _detect_denial_signals(self, page, final_url, status, normalized_text, redirect_chain):
         denial_keywords = [
             'access denied', 'forbidden', 'unauthorized', 'permission',
-            'not allowed', 'authentication required', 'login required'
+            'not allowed', 'authentication required', 'login required', 'please log in'
         ]
 
-        login_patterns = ['login', 'signin', 'sign-in']
+        login_patterns = ['#/login', '/login', 'login', 'signin', 'sign-in']
         final_url_lower = (final_url or '').lower()
         redirect_chain_lower = [(u or '').lower() for u in (redirect_chain or [])]
 
@@ -1036,14 +1421,24 @@ class QuickScanner:
         if not redirect_to_login:
             redirect_to_login = any(any(p in u for p in login_patterns) for u in redirect_chain_lower)
 
-        # Also check known login URL paths
+        # Also check known login URL paths/fragments
         for profile in self.auth_profiles:
             login_url = profile.get('login_url')
             if not login_url:
                 continue
             try:
-                login_path = urlparse(login_url).path.lower()
-                if login_path and login_path in final_url_lower:
+                parsed_login = urlparse(login_url)
+                login_path = (parsed_login.path or '').lower().rstrip('/')
+                login_fragment = (parsed_login.fragment or '').lower().strip()
+
+                # Hash routes (e.g. "#/login") must match fragment; plain "/" path
+                # should never force redirect_to_login for every page.
+                if login_fragment.startswith('/'):
+                    if f"#{login_fragment}" in final_url_lower:
+                        redirect_to_login = True
+                        break
+
+                if login_path and login_path != '/' and login_path in final_url_lower:
                     redirect_to_login = True
                     break
             except Exception:
@@ -1053,15 +1448,144 @@ class QuickScanner:
         text_lower = (normalized_text or '').lower()
         denial_hits = [kw for kw in denial_keywords if kw in text_lower]
 
+        denial_indicators_found = []
+        if status in (401, 403):
+            denial_indicators_found.append('status_denied')
+        if redirect_to_login:
+            denial_indicators_found.append('redirect_to_login')
+        if login_form:
+            denial_indicators_found.append('login_form')
+        for hit in denial_hits:
+            denial_indicators_found.append(f"text:{hit}")
+
+        denial_indicators_found = list(dict.fromkeys(denial_indicators_found))
+
         return {
             'status_denied': status in (401, 403),
             'redirect_to_login': redirect_to_login,
             'login_form': login_form,
             'denial_keywords': len(denial_hits) > 0,
-            'denial_keyword_matches': denial_hits
+            'denial_keyword_matches': denial_hits,
+            'denial_indicators_found': denial_indicators_found
         }
 
-    def _classify_access(self, status, denial_signals):
+    def _fragment_path(self, url):
+        """Extract normalized SPA fragment path (e.g., '#/admin?x=1' -> '/admin')."""
+        try:
+            fragment = (urlparse(url).fragment or '').strip().lower()
+            if not fragment:
+                return ''
+            if '?' in fragment:
+                fragment = fragment.split('?', 1)[0]
+            if not fragment.startswith('/'):
+                fragment = f"/{fragment}"
+            return fragment.rstrip('/')
+        except Exception:
+            return ''
+
+    def _derive_effective_status(self, response, requested_url, final_url):
+        """
+        Derive an HTTP-like status for SPA hash-route navigations.
+        Playwright may return no network response on hash changes.
+        """
+        if response is not None:
+            try:
+                return int(response.status)
+            except Exception:
+                return 0
+
+        if self.spa_mode:
+            requested_fragment = self._fragment_path(requested_url)
+            final_fragment = self._fragment_path(final_url)
+            if requested_fragment or final_fragment:
+                # Hash-route navigations are in-document transitions.
+                return 200
+
+        return 0
+
+    def _detect_spa_dom_access_signals(self, page, requested_url, final_url, normalized_text, spa_class):
+        denied_indicators_found = []
+        auth_indicators_found = []
+
+        requested_fragment = self._fragment_path(requested_url)
+        final_fragment = self._fragment_path(final_url)
+        final_url_lower = (final_url or '').lower()
+        text_lower = (normalized_text or '').lower()
+
+        if '#/login' in final_url_lower:
+            denied_indicators_found.append('redirect:#/login')
+
+        if (
+            requested_fragment
+            and final_fragment
+            and requested_fragment != final_fragment
+            and spa_class in ('auth', 'admin')
+        ):
+            denied_indicators_found.append(f"redirect:{requested_fragment}->{final_fragment}")
+
+        denial_text_markers = [
+            'please log in',
+            'access denied',
+            'unauthorized',
+            'forbidden',
+            'authentication required',
+            'login required',
+        ]
+        for marker in denial_text_markers:
+            if marker in text_lower:
+                denied_indicators_found.append(f"text:{marker}")
+
+        auth_text_markers = [
+            'logout',
+            'my account',
+            'order history',
+            'your basket',
+        ]
+        for marker in auth_text_markers:
+            if marker in text_lower:
+                auth_indicators_found.append(f"text:{marker}")
+
+        if spa_class == 'admin':
+            admin_text_markers = [
+                'administration',
+                'user management',
+                'application configuration',
+                'deluxe membership',
+            ]
+            for marker in admin_text_markers:
+                if marker in text_lower:
+                    auth_indicators_found.append(f"admin_text:{marker}")
+
+        selector_checks = [
+            ('logout_button', 'button:has-text("Logout")'),
+            ('logout_link', 'a:has-text("Logout")'),
+            ('account_button', 'button:has-text("Account")'),
+            ('account_menu', '[aria-label*="account" i]'),
+        ]
+        for label, selector in selector_checks:
+            try:
+                if page.locator(selector).count() > 0:
+                    auth_indicators_found.append(label)
+            except Exception:
+                continue
+
+        if spa_class == 'admin':
+            admin_selector_checks = [
+                ('administration_title', 'text=Administration'),
+                ('user_management_table', 'text=User Management'),
+            ]
+            for label, selector in admin_selector_checks:
+                try:
+                    if page.locator(selector).count() > 0:
+                        auth_indicators_found.append(label)
+                except Exception:
+                    continue
+
+        denied_indicators_found = list(dict.fromkeys(denied_indicators_found))
+        auth_indicators_found = list(dict.fromkeys(auth_indicators_found))
+        return denied_indicators_found, auth_indicators_found
+
+    def _classify_access(self, status, denial_signals, spa_class='public'):
         denied_like = False
         if status in (401, 403):
             denied_like = True
@@ -1071,6 +1595,14 @@ class QuickScanner:
             denied_like = True
         if denial_signals.get('denial_keywords'):
             denied_like = True
+
+        if self.spa_mode and spa_class in ('admin', 'auth'):
+            if denial_signals.get('denial_indicators_found'):
+                denied_like = True
+            # SPA shells often return 200 for both allowed and denied routes.
+            # For protected SPA routes, treat 2xx + no denial signals as accessible.
+            allowed_like = bool(status and 200 <= status < 300 and not denied_like)
+            return allowed_like, denied_like
 
         allowed_like = False
         if status and 200 <= status < 300 and not denied_like:
@@ -1091,34 +1623,46 @@ class QuickScanner:
 
     def _spa_route_classification(self, url):
         if not self.spa_mode or not url:
-            return None
+            return 'public'
 
         try:
             parsed = urlparse(url)
-            path = (parsed.path or '').lower()
+            path = (parsed.path or '').lower().rstrip('/')
             fragment = (parsed.fragment or '').lower()
         except Exception:
             path = ''
             fragment = ''
 
-        target = f"{path} {fragment}"
+        fragment_path = fragment
+        if '?' in fragment_path:
+            fragment_path = fragment_path.split('?', 1)[0]
+        if fragment_path and not fragment_path.startswith('/'):
+            fragment_path = f"/{fragment_path}"
+        fragment_path = fragment_path.rstrip('/')
 
-        admin_keywords = [
-            'admin', 'administration', 'manage', 'users', 'roles'
-        ]
-        auth_keywords = [
-            'profile', 'account', 'orders', 'order', 'basket',
-            'wallet', 'address', 'payment', 'complaint', 'history'
-        ]
+        explicit_match = self.spa_protected_routes.get(fragment_path)
+        if explicit_match:
+            return explicit_match
 
-        if any(keyword in target for keyword in admin_keywords):
+        target = f"{path} {fragment} {url.lower()}"
+
+        if 'administration' in target:
             return 'admin'
-        if any(keyword in target for keyword in auth_keywords):
+        if any(keyword in target for keyword in ('address', 'change-password', 'accounting')):
             return 'auth'
 
-        return None
+        return 'public'
 
     def _is_protected_url(self, url, admin_data, user_data, guest_data):
+        if self._is_dvwa_protected_path(url):
+            admin_allowed = (admin_data or {}).get('allowed_like', False)
+            user_allowed = (user_data or {}).get('allowed_like', False)
+            if admin_allowed or user_allowed:
+                return True
+
+        if self.spa_mode and self._spa_route_classification(url) in ('auth', 'admin'):
+            return True
+
         admin_allowed = (admin_data or {}).get('allowed_like', False)
         if not admin_allowed:
             return False
@@ -1128,18 +1672,21 @@ class QuickScanner:
         if user_denied or guest_denied:
             return True
 
-        if self.spa_mode and self._spa_route_classification(url):
-            return True
-
         if self._has_strong_auth_indicators(admin_data):
             denial_keywords = (admin_data or {}).get('denial_signals', {}).get('denial_keywords')
-            if not denial_keywords:
+            guest_allowed = (guest_data or {}).get('allowed_like', False)
+            if not denial_keywords and not guest_allowed:
                 return True
 
         return False
 
-    def _is_auth_gated_by_observation(self, admin_data, user_data, guest_data):
+    def _is_auth_gated_by_observation(self, url, admin_data, user_data, guest_data):
         admin_allowed = (admin_data or {}).get('allowed_like', False)
+        user_allowed = (user_data or {}).get('allowed_like', False)
+
+        if self._is_dvwa_protected_path(url) and (admin_allowed or user_allowed):
+            return True
+
         if not admin_allowed:
             return False
         user_denied = (user_data or {}).get('denied_like', False)
@@ -1166,53 +1713,70 @@ class QuickScanner:
             self.url_data[url] = {}
         self.url_data[url][role] = data
 
+    def _visit_url_on_page(self, page, url):
+        response = page.goto(url, timeout=self.timeout_ms, wait_until='domcontentloaded')
+        self._post_goto_wait(page)
+        final_url = page.url
+        status = self._derive_effective_status(response, url, final_url)
+        redirect_chain = self._get_redirect_chain(response)
+        try:
+            title = page.title()
+        except Exception:
+            title = ''
+
+        fingerprint = self._extract_fingerprint(page)
+        denial_signals = self._detect_denial_signals(
+            page,
+            final_url,
+            status,
+            fingerprint['text'],
+            redirect_chain
+        )
+        spa_class = self._spa_route_classification(url)
+        denied_indicators_found = list(denial_signals.get('denial_indicators_found') or [])
+        auth_indicators_found = []
+        if self.spa_mode:
+            spa_denied, spa_auth = self._detect_spa_dom_access_signals(
+                page,
+                url,
+                final_url,
+                fingerprint['text'],
+                spa_class
+            )
+            for indicator in spa_denied:
+                if indicator not in denied_indicators_found:
+                    denied_indicators_found.append(indicator)
+            auth_indicators_found.extend(spa_auth)
+            denial_signals['denial_indicators_found'] = denied_indicators_found
+
+        auth_indicators = self._detect_auth_indicators(fingerprint['text']) or bool(
+            auth_indicators_found and spa_class in ('auth', 'admin')
+        )
+        allowed_like, denied_like = self._classify_access(status, denial_signals, spa_class)
+
+        return {
+            'status': status,
+            'final_url': final_url,
+            'redirect_chain': redirect_chain,
+            'title': title,
+            'text_hash': fingerprint['text_hash'],
+            'text_len': fingerprint['text_len'],
+            'text_excerpt': fingerprint['excerpt'],
+            'text_sample': fingerprint['text'][:2000],
+            'denial_signals': denial_signals,
+            'has_login_form': denial_signals.get('login_form', False),
+            'has_auth_indicators': auth_indicators,
+            'spa_class': spa_class,
+            'denial_indicators_found': denied_indicators_found,
+            'auth_indicators_found': auth_indicators_found,
+            'allowed_like': allowed_like,
+            'denied_like': denied_like
+        }
+
     def _visit_url(self, context, url):
         page = context.new_page()
         try:
-            response = page.goto(url, timeout=self.timeout_ms, wait_until='domcontentloaded')
-            if self.spa_mode:
-                try:
-                    page.wait_for_load_state('networkidle', timeout=min(8000, self.timeout_ms))
-                except Exception:
-                    pass
-                try:
-                    page.wait_for_timeout(750)
-                except Exception:
-                    pass
-            status = response.status if response else 0
-            final_url = page.url
-            redirect_chain = self._get_redirect_chain(response)
-            try:
-                title = page.title()
-            except Exception:
-                title = ''
-
-            fingerprint = self._extract_fingerprint(page)
-            denial_signals = self._detect_denial_signals(
-                page,
-                final_url,
-                status,
-                fingerprint['text'],
-                redirect_chain
-            )
-            auth_indicators = self._detect_auth_indicators(fingerprint['text'])
-            allowed_like, denied_like = self._classify_access(status, denial_signals)
-
-            return {
-                'status': status,
-                'final_url': final_url,
-                'redirect_chain': redirect_chain,
-                'title': title,
-                'text_hash': fingerprint['text_hash'],
-                'text_len': fingerprint['text_len'],
-                'text_excerpt': fingerprint['excerpt'],
-                'text_sample': fingerprint['text'][:2000],
-                'denial_signals': denial_signals,
-                'has_login_form': denial_signals.get('login_form', False),
-                'has_auth_indicators': auth_indicators,
-                'allowed_like': allowed_like,
-                'denied_like': denied_like
-            }
+            return self._visit_url_on_page(page, url)
         finally:
             try:
                 page.close()
@@ -1230,107 +1794,153 @@ class QuickScanner:
 
         start_url = self._normalize_url(start_url) or start_url
         queue = deque([(start_url, 0)])
+        queued = {start_url}
         visited = self.urls_by_role.get(role, set())
 
         if self.spa_mode:
             base = self.base_url or start_url
             for seed in self._get_spa_seed_routes():
                 seeded = self._normalize_url(f"{base}{seed}")
-                if seeded and self._is_in_scope(seeded):
+                if seeded and self._is_in_scope(seeded) and seeded not in queued:
                     queue.append((seeded, 1))
+                    queued.add(seeded)
 
-        while queue and len(visited) < self.max_pages:
-            url, current_depth = queue.popleft()
-            if current_depth > self.max_depth:
-                continue
-
-            url = self._normalize_url(url) or url
-            if not url or url in visited:
-                continue
-            if not self._is_in_scope(url):
-                continue
-            if self._should_skip_url(url):
-                print(f"[{role}] Skipping dangerous URL: {url}")
-                continue
-            if self._is_static_asset(url):
-                continue
-
-            time.sleep(self.crawl_delay_ms / 1000.0)
-
+        page = None
+        try:
             page = context.new_page()
+
+            while queue and len(visited) < self.max_pages:
+                self._check_time_budget('crawl')
+                if self._is_stop_requested():
+                    break
+
+                url, current_depth = queue.popleft()
+                if current_depth > self.max_depth:
+                    continue
+
+                url = self._normalize_url(url) or url
+                if not url or url in visited:
+                    continue
+                if not self._is_in_scope(url):
+                    continue
+                if self._should_skip_url(url):
+                    print(f"[{role}] Skipping dangerous URL: {url}")
+                    continue
+                if self._is_static_asset(url):
+                    continue
+
+                delay_ms = self._effective_delay_ms()
+                if delay_ms > 0:
+                    time.sleep(delay_ms / 1000.0)
+
+                try:
+                    response = page.goto(url, timeout=self.timeout_ms, wait_until='domcontentloaded')
+                    self._post_goto_wait(page)
+                    final_url = page.url
+                    status = self._derive_effective_status(response, url, final_url)
+                    redirect_chain = self._get_redirect_chain(response)
+                    try:
+                        title = page.title()
+                    except Exception:
+                        title = ''
+
+                    fingerprint = self._extract_fingerprint(page)
+                    denial_signals = self._detect_denial_signals(
+                        page,
+                        final_url,
+                        status,
+                        fingerprint['text'],
+                        redirect_chain
+                    )
+                    spa_class = self._spa_route_classification(url)
+                    denied_indicators_found = list(denial_signals.get('denial_indicators_found') or [])
+                    auth_indicators_found = []
+                    if self.spa_mode:
+                        spa_denied, spa_auth = self._detect_spa_dom_access_signals(
+                            page,
+                            url,
+                            final_url,
+                            fingerprint['text'],
+                            spa_class
+                        )
+                        for indicator in spa_denied:
+                            if indicator not in denied_indicators_found:
+                                denied_indicators_found.append(indicator)
+                        auth_indicators_found.extend(spa_auth)
+                        denial_signals['denial_indicators_found'] = denied_indicators_found
+
+                    auth_indicators = self._detect_auth_indicators(fingerprint['text']) or bool(
+                        auth_indicators_found and spa_class in ('auth', 'admin')
+                    )
+                    allowed_like, denied_like = self._classify_access(status, denial_signals, spa_class)
+
+                    data = {
+                        'status': status,
+                        'final_url': final_url,
+                        'redirect_chain': redirect_chain,
+                        'title': title,
+                        'text_hash': fingerprint['text_hash'],
+                        'text_len': fingerprint['text_len'],
+                        'text_excerpt': fingerprint['excerpt'],
+                        'text_sample': fingerprint['text'][:2000],
+                        'denial_signals': denial_signals,
+                        'has_login_form': denial_signals.get('login_form', False),
+                        'has_auth_indicators': auth_indicators,
+                        'spa_class': spa_class,
+                        'denial_indicators_found': denied_indicators_found,
+                        'auth_indicators_found': auth_indicators_found,
+                        'allowed_like': allowed_like,
+                        'denied_like': denied_like
+                    }
+
+                    self._record_url_data(url, role, data)
+                    visited.add(url)
+                    self.all_discovered_urls.add(url)
+
+                    access_flag = 'OK' if allowed_like else 'DENIED'
+                    print(f"[{role}] {access_flag} ({current_depth}): {url}")
+                    if self.spa_mode and self.debug_spa_access and role == 'guest' and spa_class in ('auth', 'admin'):
+                        self._debug_log(
+                            "SPA guest decision "
+                            f"url={url} class={spa_class} allowed_like={allowed_like} denied_like={denied_like} "
+                            f"denied_indicators={denied_indicators_found} auth_indicators={auth_indicators_found}"
+                        )
+
+                    self._update_progress(
+                        current_url=url,
+                        urls_discovered=len(self.all_discovered_urls)
+                    )
+
+                    if len(visited) >= self.max_pages:
+                        print(f"[{role}] Reached per-role URL limit ({self.max_pages}); stopping crawl for this role.")
+                        break
+
+                    should_extract_links = allowed_like and (
+                        (response and self._is_html_response(response)) or self.spa_mode
+                    )
+                    if should_extract_links:
+                        links = self._extract_links(page, final_url)
+                        for link in links:
+                            if len(visited) >= self.max_pages or self._is_stop_requested():
+                                break
+                            if link not in visited and link not in queued and self._is_in_scope(link):
+                                queue.append((link, current_depth + 1))
+                                queued.add(link)
+
+                except Exception as e:
+                    print(f"[{role}] Crawl error for {url}: {e}")
+                    try:
+                        if page:
+                            page.close()
+                    except Exception:
+                        pass
+                    page = context.new_page()
+        finally:
             try:
-                response = page.goto(url, timeout=self.timeout_ms, wait_until='domcontentloaded')
-                if self.spa_mode:
-                    try:
-                        page.wait_for_load_state('networkidle', timeout=min(8000, self.timeout_ms))
-                    except Exception:
-                        pass
-                    try:
-                        page.wait_for_timeout(750)
-                    except Exception:
-                        pass
-                status = response.status if response else 0
-                final_url = page.url
-                redirect_chain = self._get_redirect_chain(response)
-                try:
-                    title = page.title()
-                except Exception:
-                    title = ''
-
-                fingerprint = self._extract_fingerprint(page)
-                denial_signals = self._detect_denial_signals(
-                    page,
-                    final_url,
-                    status,
-                    fingerprint['text'],
-                    redirect_chain
-                )
-                auth_indicators = self._detect_auth_indicators(fingerprint['text'])
-                allowed_like, denied_like = self._classify_access(status, denial_signals)
-
-                data = {
-                    'status': status,
-                    'final_url': final_url,
-                    'redirect_chain': redirect_chain,
-                    'title': title,
-                    'text_hash': fingerprint['text_hash'],
-                    'text_len': fingerprint['text_len'],
-                    'text_excerpt': fingerprint['excerpt'],
-                    'text_sample': fingerprint['text'][:2000],
-                    'denial_signals': denial_signals,
-                    'has_login_form': denial_signals.get('login_form', False),
-                    'has_auth_indicators': auth_indicators,
-                    'allowed_like': allowed_like,
-                    'denied_like': denied_like
-                }
-
-                self._record_url_data(url, role, data)
-                visited.add(url)
-                self.all_discovered_urls.add(url)
-
-                access_flag = 'OK' if allowed_like else 'DENIED'
-                print(f"[{role}] {access_flag} ({current_depth}): {url}")
-
-                self._update_progress(
-                    current_url=url,
-                    urls_discovered=len(self.all_discovered_urls)
-                )
-
-                if response and self._is_html_response(response) and allowed_like:
-                    links = self._extract_links(page, final_url)
-                    for link in links:
-                        if len(visited) >= self.max_pages:
-                            break
-                        if link not in visited and self._is_in_scope(link):
-                            queue.append((link, current_depth + 1))
-
-            except Exception as e:
-                print(f"[{role}] Crawl error for {url}: {e}")
-            finally:
-                try:
+                if page:
                     page.close()
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
     def _detect_auth_indicators(self, content):
         """
@@ -1371,6 +1981,7 @@ class QuickScanner:
                         raw = elem.get_attribute(attr)
                         if not raw:
                             continue
+                        self._enable_spa_mode_from_discovery(raw, current_url)
                         absolute_url = self._resolve_url(current_url, raw)
                         if not absolute_url:
                             continue
@@ -1390,6 +2001,7 @@ class QuickScanner:
                         onclick
                     )
                     for match in url_matches:
+                        self._enable_spa_mode_from_discovery(match, current_url)
                         absolute_url = self._resolve_url(current_url, match)
                         if absolute_url and self._is_in_scope(absolute_url):
                             links.add(absolute_url)
@@ -1459,33 +2071,56 @@ class QuickScanner:
         total_urls = len(urls_to_test)
 
         for role in self.roles_to_crawl:
+            self._raise_if_stopped('retest')
             context = self.role_contexts.get(role)
             if not context:
                 continue
 
             print(f"   [{role}] Testing {total_urls} URLs...")
-            for idx, url in enumerate(urls_to_test):
-                if self._should_skip_url(url) or self._is_static_asset(url):
-                    continue
+            page = None
+            try:
+                page = context.new_page()
+                for idx, url in enumerate(urls_to_test):
+                    if self._is_stop_requested():
+                        self._raise_if_stopped('retest')
+                    if self._should_skip_url(url) or self._is_static_asset(url):
+                        continue
 
-                time.sleep(self.crawl_delay_ms / 1000.0)
+                    delay_ms = self._effective_delay_ms()
+                    if delay_ms > 0:
+                        time.sleep(delay_ms / 1000.0)
 
+                    try:
+                        data = self._visit_url_on_page(page, url)
+                        self._record_url_data(url, role, data)
+                        spa_class = data.get('spa_class', 'public')
+                        if self.spa_mode and self.debug_spa_access and role == 'guest' and spa_class in ('auth', 'admin'):
+                            self._debug_log(
+                                "SPA guest retest decision "
+                                f"url={url} class={spa_class} allowed_like={data.get('allowed_like')} "
+                                f"denied_like={data.get('denied_like')} "
+                                f"denied_indicators={data.get('denial_indicators_found', [])} "
+                                f"auth_indicators={data.get('auth_indicators_found', [])}"
+                            )
+
+                        access_flag = 'OK' if data.get('allowed_like') else 'DENIED'
+                        print(f"      [{role}] {access_flag}: {url.split('/')[-1] or url}")
+                        total_tests += 1
+
+                        self._update_progress(
+                            current_url=url,
+                            urls_tested=total_tests,
+                            progress_percent=70 + int((idx / max(1, total_urls)) * 8)
+                        )
+
+                    except Exception as e:
+                        print(f"      [{role}] Error testing {url}: {e}")
+            finally:
                 try:
-                    data = self._visit_url(context, url)
-                    self._record_url_data(url, role, data)
-
-                    access_flag = 'OK' if data.get('allowed_like') else 'DENIED'
-                    print(f"      [{role}] {access_flag}: {url.split('/')[-1] or url}")
-                    total_tests += 1
-
-                    self._update_progress(
-                        current_url=url,
-                        urls_tested=total_tests,
-                        progress_percent=70 + int((idx / max(1, total_urls)) * 8)
-                    )
-
-                except Exception as e:
-                    print(f"      [{role}] Error testing {url}: {e}")
+                    if page:
+                        page.close()
+                except Exception:
+                    pass
 
         print(f"   Cross-role testing complete: {total_tests} tests")
         if self.spa_mode:
@@ -1597,6 +2232,11 @@ class QuickScanner:
         return 'Low'
 
     def _classify_expected_access(self, url, role, discovered_admin, discovered_user, discovered_guest, is_protected):
+        if self._is_dvwa_authbypass_path(url):
+            if role in ('guest', 'user'):
+                return 'Denied'
+            return 'Allowed'
+
         if role == 'guest':
             if discovered_guest:
                 return 'Allowed' if not is_protected else 'Denied'
@@ -1639,14 +2279,24 @@ class QuickScanner:
             in_guest = url in guest_discovered
 
             is_protected = self._is_protected_url(url, admin_data, user_data, guest_data)
-            auth_required_observed = self._is_auth_gated_by_observation(admin_data, user_data, guest_data)
+            auth_required_observed = self._is_auth_gated_by_observation(url, admin_data, user_data, guest_data)
             spa_class = self._spa_route_classification(url)
 
-            def record_violation(role, violation_type, higher_role_data, lower_role_data):
+            if self.spa_mode and self.debug_spa_access and spa_class in ('auth', 'admin'):
+                self._debug_log(f"SPA route classification: {url} -> {spa_class}")
+                if guest_data:
+                    self._debug_log(
+                        "SPA guest analysis "
+                        f"url={url} class={spa_class} allowed_like={guest_data.get('allowed_like')} "
+                        f"denied_like={guest_data.get('denied_like')} "
+                        f"denied_indicators={guest_data.get('denial_indicators_found', [])} "
+                        f"auth_indicators={guest_data.get('auth_indicators_found', [])}"
+                    )
+
+            def record_violation(role, violation_type, higher_role_data, lower_role_data, extra_evidence=None):
                 key = (url_id, role, violation_type)
                 if key in recorded:
                     return
-                recorded.add(key)
 
                 expected = self._classify_expected_access(
                     url,
@@ -1658,22 +2308,40 @@ class QuickScanner:
                 )
                 actual = 'Allowed' if lower_role_data.get('allowed_like') else 'Denied'
 
+                # A violation must represent an access-control mismatch.
+                if expected == actual:
+                    return
+
+                recorded.add(key)
+
                 confidence = self._confidence_for_violation(higher_role_data, lower_role_data)
+                evidence = {
+                    'url': url,
+                    'status': lower_role_data.get('status'),
+                    'final_url': lower_role_data.get('final_url'),
+                    'denial_signals': lower_role_data.get('denial_signals'),
+                    'text_hash': lower_role_data.get('text_hash'),
+                    'confidence': confidence
+                }
+                if extra_evidence:
+                    evidence.update(extra_evidence)
                 self._record_violation(
                     url_id=url_id,
                     role=role,
                     violation_type=violation_type,
                     expected=expected,
                     actual=actual,
-                    evidence={
-                        'url': url,
-                        'status': lower_role_data.get('status'),
-                        'final_url': lower_role_data.get('final_url'),
-                        'denial_signals': lower_role_data.get('denial_signals'),
-                        'text_hash': lower_role_data.get('text_hash'),
-                        'confidence': confidence
-                    }
+                    evidence=evidence
                 )
+
+            def role_reached_target_path(role_data, path_checker):
+                if not role_data:
+                    return False
+                status = role_data.get('status') or 0
+                if status < 200 or status >= 300:
+                    return False
+                final_url = role_data.get('final_url') or url
+                return bool(path_checker(final_url))
 
             # Detection 1: Guest sees authenticated content
             if self.test_bac and guest_allowed and admin_allowed and guest_data.get('has_auth_indicators'):
@@ -1695,12 +2363,39 @@ class QuickScanner:
                         lower_role_data=guest_data
                     )
                 elif self.spa_mode and spa_class in ('auth', 'admin'):
+                    # SPA shell pages often return HTTP 200 and similar wrappers for all roles,
+                    # so route protection is validated by route class + denied-like indicators.
                     record_violation(
                         role='guest',
                         violation_type='Unauthorized Access - Guest access to protected SPA route',
                         higher_role_data=admin_data,
-                        lower_role_data=guest_data
+                        lower_role_data=guest_data,
+                        extra_evidence={
+                            'role': 'guest',
+                            'spa_class': spa_class,
+                            'guest_status': guest_data.get('status'),
+                            'guest_final_url': guest_data.get('final_url'),
+                            'denial_indicators_found': guest_data.get('denial_indicators_found', []),
+                            'auth_indicators_found': guest_data.get('auth_indicators_found', [])
+                        }
                     )
+
+            # SPA-only BAC detection for protected hash routes, even when status codes are all 200.
+            if self.test_bac and self.spa_mode and spa_class in ('auth', 'admin') and guest_allowed:
+                record_violation(
+                    role='guest',
+                    violation_type='Unauthorized Access - Guest access to protected SPA route',
+                    higher_role_data=admin_data or user_data,
+                    lower_role_data=guest_data,
+                    extra_evidence={
+                        'role': 'guest',
+                        'spa_class': spa_class,
+                        'guest_status': guest_data.get('status'),
+                        'guest_final_url': guest_data.get('final_url'),
+                        'denial_indicators_found': guest_data.get('denial_indicators_found', []),
+                        'auth_indicators_found': guest_data.get('auth_indicators_found', [])
+                    }
+                )
 
             # Detection 3: Forced browsing (guest accesses URL not discovered as guest)
             if self.test_forced_browsing and is_protected and guest_allowed and not in_guest and (in_admin or in_user):
@@ -1712,7 +2407,10 @@ class QuickScanner:
                 )
 
             # Detection 4: User sees admin-only content
-            if self.test_priv_esc and user_allowed and admin_allowed and is_protected:
+            user_admin_only_candidate = (
+                in_admin and not in_user and admin_allowed and is_protected
+            )
+            if self.test_priv_esc and user_allowed and user_admin_only_candidate:
                 if guest_denied and self._similar_content(admin_data, user_data):
                     record_violation(
                         role='user',
@@ -1727,6 +2425,58 @@ class QuickScanner:
                         higher_role_data=admin_data,
                         lower_role_data=user_data
                     )
+
+            # DVWA-specific BAC: authbypass page is treated as admin-only.
+            if self._is_dvwa_authbypass_path(url):
+                admin_reached_authbypass = role_reached_target_path(admin_data, self._is_dvwa_authbypass_path)
+                user_reached_authbypass = role_reached_target_path(user_data, self._is_dvwa_authbypass_path)
+                guest_reached_authbypass = role_reached_target_path(guest_data, self._is_dvwa_authbypass_path)
+
+                if self.test_priv_esc and user_reached_authbypass:
+                    key = (url_id, 'user', 'Privilege Escalation - User accessed DVWA authbypass page')
+                    if key not in recorded:
+                        recorded.add(key)
+                        confidence = self._confidence_for_violation(admin_data, user_data) if admin_data else 'Medium'
+                        self._record_violation(
+                            url_id=url_id,
+                            role='user',
+                            violation_type='Privilege Escalation - User accessed DVWA authbypass page',
+                            expected='Denied',
+                            actual='Allowed',
+                            evidence={
+                                'target': 'dvwa-authbypass',
+                                'url': url,
+                                'confidence': confidence,
+                                'admin_status': admin_data.get('status'),
+                                'admin_final_url': admin_data.get('final_url'),
+                                'user_status': user_data.get('status'),
+                                'user_final_url': user_data.get('final_url'),
+                                'user_denial_signals': user_data.get('denial_signals')
+                            }
+                        )
+
+                if self.test_bac and guest_reached_authbypass:
+                    key = (url_id, 'guest', 'Unauthorized Access - Guest accessed DVWA authbypass page')
+                    if key not in recorded:
+                        recorded.add(key)
+                        confidence = self._confidence_for_violation(admin_data, guest_data) if admin_data else 'Medium'
+                        self._record_violation(
+                            url_id=url_id,
+                            role='guest',
+                            violation_type='Unauthorized Access - Guest accessed DVWA authbypass page',
+                            expected='Denied',
+                            actual='Allowed',
+                            evidence={
+                                'target': 'dvwa-authbypass',
+                                'url': url,
+                                'confidence': confidence,
+                                'admin_status': admin_data.get('status'),
+                                'admin_final_url': admin_data.get('final_url'),
+                                'guest_status': guest_data.get('status'),
+                                'guest_final_url': guest_data.get('final_url'),
+                                'guest_denial_signals': guest_data.get('denial_signals')
+                            }
+                        )
 
             # Detection 5: Auth-required pages accessible by guest
             if self.test_forced_browsing and guest_allowed and admin_allowed and auth_required_observed:
@@ -1746,13 +2496,6 @@ class QuickScanner:
                         higher_role_data=admin_data,
                         lower_role_data=guest_data
                     )
-                if self.test_priv_esc and user_allowed and guest_denied and is_protected:
-                    record_violation(
-                        role='user',
-                        violation_type='Auth Bypass - User access on auth-gated URL',
-                        higher_role_data=admin_data,
-                        lower_role_data=user_data
-                    )
 
     def _compare_and_detect_violations(self):
         """Compare discovered URLs across roles to detect BAC violations."""
@@ -1770,7 +2513,7 @@ class QuickScanner:
         from app.models import URL
 
         def status_str(value):
-            return str(value) if value else None
+            return str(value) if value is not None else None
 
         for url in sorted(self.all_discovered_urls):
             url_info = self.url_data.get(url, {})
@@ -1890,6 +2633,10 @@ class QuickScanner:
             'total_urls': len(self.all_discovered_urls),
             'total_violations': len(self.violations),
             'auth_failures': self.auth_failures,
+            'spa_mode': self.spa_mode,
+            'spa_mode_reason': self.spa_mode_reason,
+            'dvwa_security_level': self.dvwa_security_level,
+            'dvwa_security_applied': self.dvwa_security_applied,
             'violation_types': {}
         }
         

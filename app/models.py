@@ -20,6 +20,12 @@ class SystemUser(db.Model):
 
     # Relationships
     applications = db.relationship('Application', backref='user', lazy=True)
+    profile = db.relationship(
+        'UserProfile',
+        back_populates='user',
+        uselist=False,
+        cascade='all, delete-orphan'
+    )
 
     # Password handling
     def set_password(self, password):
@@ -27,6 +33,19 @@ class SystemUser(db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+
+# ==============================
+# USER PROFILE TABLE
+# ==============================
+class UserProfile(db.Model):
+    __tablename__ = 'user_profile'
+
+    user_id = db.Column(db.Integer, db.ForeignKey('systemuser.user_id'), primary_key=True)
+    full_name = db.Column(db.String(120), nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('SystemUser', back_populates='profile')
 
 
 # ==============================

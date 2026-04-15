@@ -9,6 +9,29 @@
   href="{{ url_for('static', filename='settings-styles.css') }}"
 />
 
+<!-- Mobile Navigation Toggle Button -->
+<button
+  class="mobile-nav-toggle"
+  onclick="toggleSidebar()"
+  aria-label="Toggle navigation"
+>
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+  >
+    <line x1="3" y1="6" x2="21" y2="6"></line>
+    <line x1="3" y1="12" x2="21" y2="12"></line>
+    <line x1="3" y1="18" x2="21" y2="18"></line>
+  </svg>
+</button>
+
+<!-- Sidebar Overlay (for mobile) -->
+<div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
 <!-- Sidebar -->
 <div class="sidebar">
   <div class="sidebar-header">
@@ -189,7 +212,6 @@
                   class="form-input"
                   id="emailInput"
                   value="{{ email }}"
-                  readonly
                 />
               </div>
             </div>
@@ -200,7 +222,6 @@
                 class="form-input"
                 id="fullNameInput"
                 value="{{ full_name or '' }}"
-                readonly
               />
             </div>
           </div>
@@ -438,16 +459,42 @@
         saveBtn.addEventListener("click", () => {
           const settings = {
             email: document.getElementById("emailInput")?.value || "",
-            fullName: document.getElementById("fullNameInput")?.value || "",
+            full_name: document.getElementById("fullNameInput")?.value || "",
           };
 
-          // TODO: Implement API call to save settings
-          console.log("Saving settings:", settings);
+          if (!settings.email.trim()) {
+            ThemeManager.showNotification(
+              "Email address is required",
+              "error",
+            );
+            return;
+          }
 
-          ThemeManager.showNotification(
-            "Settings saved successfully!",
-            "success",
-          );
+          saveBtn.disabled = true;
+
+          fetch("/api/settings/profile", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(settings),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              if (!data.success) {
+                throw new Error(data.message || "Failed to update settings");
+              }
+              ThemeManager.showNotification(
+                data.message || "Settings saved successfully!",
+                "success",
+              );
+            })
+            .catch((error) => {
+              ThemeManager.showNotification(error.message, "error");
+            })
+            .finally(() => {
+              saveBtn.disabled = false;
+            });
         });
       },
 

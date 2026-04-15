@@ -3,6 +3,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash
 from werkzeug.security import check_password_hash
 from functools import wraps
+from datetime import datetime, timedelta
+from sqlalchemy import func
 from app import db
 from app.models import SystemUser, Scan, Application, URL, Violation, Credential
 
@@ -121,8 +123,63 @@ def dashboard():
     
     # Recent scans
     recent_scans = Scan.query.order_by(Scan.created_at.desc()).limit(5).all()
-    
-    return render_template('admin/dashboard.html', stats=stats, recent_users=recent_users, recent_scans=recent_scans)
+
+    # Scan status distribution
+    status_expr = func.lower(func.coalesce(Scan.status, 'pending'))
+    status_rows = (
+        db.session.query(status_expr.label('status'), func.count(Scan.scan_id))
+        .group_by(status_expr)
+        .all()
+    )
+    scan_status = {'completed': 0, 'running': 0, 'failed': 0, 'pending': 0}
+    for status, count in status_rows:
+        normalized_status = status if status in scan_status else 'pending'
+        scan_status[normalized_status] += count
+
+    # Scan activity for the past 7 days
+    start_date = datetime.utcnow().date() - timedelta(days=6)
+    trend_map = {start_date + timedelta(days=i): 0 for i in range(7)}
+    trend_rows = (
+        db.session.query(func.date(Scan.created_at).label('scan_date'), func.count(Scan.scan_id))
+        .filter(Scan.created_at >= datetime.combine(start_date, datetime.min.time()))
+        .group_by(func.date(Scan.created_at))
+        .all()
+    )
+
+    for scan_date, count in trend_rows:
+        parsed_date = scan_date
+        if isinstance(scan_date, str):
+            try:
+                parsed_date = datetime.strptime(scan_date, '%Y-%m-%d').date()
+            except ValueError:
+                continue
+        elif hasattr(scan_date, 'date'):
+            parsed_date = scan_date.date()
+
+        if parsed_date in trend_map:
+            trend_map[parsed_date] = count
+
+    chart_data = {
+        'scan_status': scan_status,
+        'scan_trend': {
+            'labels': [date.strftime('%b %d') for date in trend_map.keys()],
+            'values': list(trend_map.values()),
+        },
+        'resource_distribution': {
+            'Scans': stats['total_scans'],
+            'Applications': stats['total_applications'],
+            'URLs': stats['total_urls'],
+            'Violations': stats['total_violations'],
+        },
+    }
+
+    return render_template(
+        'admin/dashboard.html',
+        stats=stats,
+        recent_users=recent_users,
+        recent_scans=recent_scans,
+        chart_data=chart_data,
+    )
 
 
 # -------------------------------------------------------

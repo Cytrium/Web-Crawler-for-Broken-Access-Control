@@ -14,6 +14,7 @@ env/
 
 # Flask / Python temp
 .pycache_tmp/
+.pip-tmp/
 
 # OS / Editor
 .DS_Store

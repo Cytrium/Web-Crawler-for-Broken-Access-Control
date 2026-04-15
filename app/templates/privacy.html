@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block body %}
+
+<title>Privacy Policy - Perimeter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='legal.css') }}">
+</head>
+<body>
+  <div class="legal-page">
+    <div class="legal-shell">
+      <header class="legal-hero">
+        <div class="legal-brand">Perimeter</div>
+        <h1 class="legal-title">Privacy Policy</h1>
+        <p class="legal-subtitle">Last updated: February 8, 2026</p>
+        <div class="legal-actions">
+          <a class="legal-btn" href="{{ url_for('main.signup') }}">Create Account</a>
+          <a class="legal-link" href="{{ url_for('main.home') }}">Back to Home</a>
+        </div>
+      </header>
+
+      <main class="legal-content">
+        <section class="legal-section">
+          <h2>1. Our Commitment</h2>
+          <p>This policy is intended to align with Malaysia's Personal Data Protection Act 2010 (PDPA). We process personal data responsibly and only for legitimate security and service purposes.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>2. Data We Collect</h2>
+          <p>We may collect information you provide (such as name, email, and account credentials), scan configuration data, and service usage logs required to deliver the platform.</p>
+          <ul class="legal-list">
+            <li>Account and contact information.</li>
+            <li>Authentication profiles and scan settings you submit.</li>
+            <li>Scan results, logs, and reports.</li>
+            <li>Technical metadata (IP address, device, and browser details).</li>
+          </ul>
+        </section>
+
+        <section class="legal-section">
+          <h2>3. Purpose and Consent</h2>
+          <p>We use your data to operate the service, provide support, and improve security features. By using Perimeter and submitting data, you consent to this processing as required under the PDPA.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>4. Disclosure</h2>
+          <p>We do not sell personal data. We share data only with service providers necessary to operate the platform, or when required by law.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>5. Security and Retention</h2>
+          <p>We use reasonable technical and organizational measures to protect personal data. We retain data only as long as necessary for service delivery, legal compliance, and auditability.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>6. Cross-Border Transfers</h2>
+          <p>Where data is transferred outside Malaysia, we ensure appropriate safeguards consistent with the PDPA.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>7. Your Rights</h2>
+          <p>Under the PDPA, you may request access to, correction of, or withdrawal of consent for the processing of your personal data.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>8. Cookies and Analytics</h2>
+          <p>We may use cookies or similar technologies to maintain sessions and improve user experience. You can control cookies through your browser settings.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>9. Contact</h2>
+          <p>For privacy requests or questions, contact privacy@perimeter.example.</p>
+        </section>
+
+        <div class="legal-note">
+          This policy is a general statement of practice and does not replace legal advice for PDPA compliance.
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
+
+{% endblock %}

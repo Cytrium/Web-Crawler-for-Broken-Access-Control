@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block body %}
+
+<title>Terms of Service - Perimeter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='legal.css') }}">
+</head>
+<body>
+  <div class="legal-page">
+    <div class="legal-shell">
+      <header class="legal-hero">
+        <div class="legal-brand">Perimeter</div>
+        <h1 class="legal-title">Terms of Service</h1>
+        <p class="legal-subtitle">Last updated: February 8, 2026</p>
+        <div class="legal-actions">
+          <a class="legal-btn" href="{{ url_for('main.signup') }}">Create Account</a>
+          <a class="legal-link" href="{{ url_for('main.home') }}">Back to Home</a>
+        </div>
+      </header>
+
+      <main class="legal-content">
+        <section class="legal-section">
+          <h2>1. Scope of Service</h2>
+          <p>Perimeter provides automated scanning, reporting, and access-control testing tools for web applications. By using the service, you agree to use it only for systems you own or have explicit authorization to test.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>2. Acceptable Use</h2>
+          <p>You must not use Perimeter to probe, crawl, or attack systems without permission. You are responsible for compliance with applicable laws, third-party terms, and internal security policies.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>3. Accounts and Access</h2>
+          <p>You are responsible for safeguarding credentials and for all activity under your account. Notify us immediately if you suspect unauthorized access.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>4. Data and Reports</h2>
+          <p>Scan results and related artifacts are provided for informational and remediation purposes. Findings may include false positives or negatives; you should validate results before remediation or reporting.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>5. Availability and Changes</h2>
+          <p>We may modify, suspend, or discontinue features with reasonable notice where possible. We do not guarantee uninterrupted availability.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>6. Limitation of Liability</h2>
+          <p>To the extent permitted by law, Perimeter is provided "as is" without warranties, and we are not liable for indirect, incidental, or consequential damages arising from use of the service.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>7. Governing Law</h2>
+          <p>These terms are governed by the laws of Malaysia. Any disputes will be resolved in the courts of Malaysia unless otherwise required by law.</p>
+        </section>
+
+        <section class="legal-section">
+          <h2>8. Contact</h2>
+          <p>Questions about these terms can be directed to support@perimeter.example.</p>
+        </section>
+
+        <div class="legal-note">
+          This document is provided for general information and does not constitute legal advice.
+        </div>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
+
+{% endblock %}

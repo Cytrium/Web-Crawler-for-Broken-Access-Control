@@ -53,6 +53,12 @@ body {
     align-items: center;
 }
 
+.navbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
 .navbar-brand {
     display: flex;
     align-items: center;
@@ -66,6 +72,26 @@ body {
 .brand-name {
     font-size: 1.25rem;
     font-weight: 700;
+}
+
+.theme-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.5rem 0.85rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.6rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.theme-toggle-btn:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
 }
 
 /* === Refined Button Styling === */
@@ -334,6 +360,15 @@ body {
 
 /* Responsive Design */
 @media (max-width: 768px) {
+    .navbar-actions {
+        gap: 0.5rem;
+    }
+
+    .theme-toggle-btn {
+        padding: 0.45rem 0.65rem;
+        font-size: 0.8rem;
+    }
+
     .hero-title {
         font-size: 2rem;
     }

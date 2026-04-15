@@ -67,6 +67,36 @@
         </div>
     </div>
 
+    <!-- Charts -->
+    <div class="charts-grid">
+        <div class="dashboard-card chart-card">
+            <div class="card-header">
+                <h3>Scan Status Breakdown</h3>
+            </div>
+            <div class="card-body chart-body">
+                <canvas id="adminStatusChart" aria-label="Scan status breakdown chart"></canvas>
+            </div>
+        </div>
+
+        <!-- <div class="dashboard-card chart-card">
+            <div class="card-header">
+                <h3>System Resource Distribution</h3>
+            </div>
+            <div class="card-body chart-body">
+                <canvas id="adminResourcesChart" aria-label="System resource distribution chart"></canvas>
+            </div>
+        </div> -->
+
+        <div class="dashboard-card chart-card">
+            <div class="card-header">
+                <h3>7-Day Scan Activity</h3>
+            </div>
+            <div class="card-body chart-body">
+                <canvas id="adminTrendChart" aria-label="Scan activity trend chart"></canvas>
+            </div>
+        </div>
+    </div>
+
     <!-- Two Column Layout -->
     <div class="dashboard-grid">
         <!-- Recent Users -->
@@ -180,13 +210,151 @@
                 </svg>
                 <span>Applications</span>
             </a>
-            <a href="{{ url_for('main.dashboard') }}" class="action-card">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M19 12H5"></path>
-                    <polyline points="12 19 5 12 12 5"></polyline>
-                </svg>
-                <span>Back to App</span>
-            </a>
         </div>
     </div>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script>
+        (function () {
+            const chartData = {{ chart_data | tojson }};
+            let chartInstances = [];
+
+            function cssVar(name, fallback) {
+                const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+                return value || fallback;
+            }
+
+            function destroyCharts() {
+                chartInstances.forEach((chart) => chart.destroy());
+                chartInstances = [];
+            }
+
+            function buildCharts() {
+                if (!window.Chart) return;
+
+                destroyCharts();
+
+                const textColor = cssVar('--admin-text', '#f9fafb');
+                const mutedColor = cssVar('--admin-text-muted', '#9ca3af');
+                const borderColor = cssVar('--admin-border', '#374151');
+
+                const commonPlugins = {
+                    legend: {
+                        labels: {
+                            color: textColor
+                        }
+                    }
+                };
+
+                const statusCanvas = document.getElementById('adminStatusChart');
+                if (statusCanvas) {
+                    chartInstances.push(new Chart(statusCanvas, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Completed', 'Running', 'Failed', 'Pending'],
+                            datasets: [{
+                                data: [
+                                    chartData.scan_status.completed,
+                                    chartData.scan_status.running,
+                                    chartData.scan_status.failed,
+                                    chartData.scan_status.pending
+                                ],
+                                backgroundColor: ['#10b981', '#f59e0b', '#ef4444', '#64748b'],
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            cutout: '65%',
+                            plugins: commonPlugins
+                        }
+                    }));
+                }
+
+                const resourcesCanvas = document.getElementById('adminResourcesChart');
+                if (resourcesCanvas) {
+                    chartInstances.push(new Chart(resourcesCanvas, {
+                        type: 'bar',
+                        data: {
+                            labels: Object.keys(chartData.resource_distribution),
+                            datasets: [{
+                                label: 'Count',
+                                data: Object.values(chartData.resource_distribution),
+                                backgroundColor: ['#3b82f6', '#f59e0b', '#14b8a6', '#ef4444'],
+                                borderRadius: 8,
+                                maxBarThickness: 48
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false }
+                            },
+                            scales: {
+                                x: {
+                                    ticks: { color: mutedColor },
+                                    grid: { color: borderColor }
+                                },
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: { color: mutedColor, precision: 0 },
+                                    grid: { color: borderColor }
+                                }
+                            }
+                        }
+                    }));
+                }
+
+                const trendCanvas = document.getElementById('adminTrendChart');
+                if (trendCanvas) {
+                    chartInstances.push(new Chart(trendCanvas, {
+                        type: 'line',
+                        data: {
+                            labels: chartData.scan_trend.labels,
+                            datasets: [{
+                                label: 'Scans',
+                                data: chartData.scan_trend.values,
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                                tension: 0.35,
+                                fill: true,
+                                pointRadius: 4,
+                                pointHoverRadius: 5
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: commonPlugins,
+                            scales: {
+                                x: {
+                                    ticks: { color: mutedColor },
+                                    grid: { color: borderColor }
+                                },
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: { color: mutedColor, precision: 0 },
+                                    grid: { color: borderColor }
+                                }
+                            }
+                        }
+                    }));
+                }
+            }
+
+            buildCharts();
+
+            new MutationObserver((mutations) => {
+                const themeChanged = mutations.some((mutation) => mutation.attributeName === 'data-theme');
+                if (themeChanged) {
+                    buildCharts();
+                }
+            }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+        })();
+    </script>
 {% endblock %}
